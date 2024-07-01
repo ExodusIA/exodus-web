@@ -3,6 +3,8 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import Select from 'react-select';
 import Modal from 'react-modal';
+import { collection, getDocs, doc, updateDoc, deleteDoc } from "firebase/firestore";
+import { db } from '../../firebaseConfig'; // Importa a configuração do Firebase
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { slug } from '../utils/slug';
 
@@ -38,20 +40,17 @@ const Clients = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchClients = async () => {
       try {
-        const response = await axios.get('https://api.baserow.io/api/database/rows/table/302737/?user_field_names=true', {
-          headers: {
-            Authorization: `Token ksKlG2r9Ezpl22Sk2kBgATPFHZgIhyrL` // Use a variável de ambiente
-          }
-        });
-        setClients(response.data.results);
+        const querySnapshot = await getDocs(collection(db, "clients"));
+        const clientsList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setClients(clientsList);
       } catch (error) {
-        console.error('Error fetching data:', error);
+        console.error('Error fetching clients:', error);
       }
     };
 
-    fetchData();
+    fetchClients();
   }, []);
 
   const openModal = (client) => {
@@ -67,21 +66,14 @@ const Clients = () => {
   const handleSave = async () => {
     if (selectedClient) {
       try {
-        const payload = {
+        const clientDoc = doc(db, "clients", selectedClient.id);
+        await updateDoc(clientDoc, {
           name: selectedClient.name,
           phone: selectedClient.phone,
           email: selectedClient.email,
           status: selectedClient.status?.value,
           program: selectedClient.program?.value,
           class: selectedClient.class?.value,
-        };
-  
-        console.log('Payload:', payload); // Para depuração
-  
-        await axios.patch(`https://api.baserow.io/api/database/rows/table/302737/${selectedClient.id}/?user_field_names=true`, payload, {
-          headers: {
-            Authorization: 'Token ksKlG2r9Ezpl22Sk2kBgATPFHZgIhyrL'
-          }
         });
   
         setClients(clients.map(client => (client.id === selectedClient.id ? selectedClient : client)));
@@ -93,6 +85,22 @@ const Clients = () => {
       } catch (error) {
         console.error('Error updating client:', error);
       }
+    }
+  };
+
+  const handleDelete = async (clientId) => {
+    try {
+      await deleteDoc(doc(db, "clients", clientId));
+      setClients(clients.filter(client => client.id !== clientId));
+    } catch (error) {
+      console.error('Error deleting client:', error);
+    }
+  };
+
+  const confirmDelete = (clientId) => {
+    const confirmAction = window.confirm("Você tem certeza que deseja excluir este cliente?");
+    if (confirmAction) {
+      handleDelete(clientId);
     }
   };
 
@@ -108,9 +116,15 @@ const Clients = () => {
       <Table className="min-w-full divide-y divide-gray-200">
         <TableHeader className="bg-gray-50">
           <TableRow>
-            <TableHead className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nome</TableHead>
-            <TableHead className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</TableHead>
-            <TableHead className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Programa</TableHead>
+            <TableHead className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Nome
+            </TableHead>
+            <TableHead className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Status
+            </TableHead>
+            <TableHead className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Programa
+            </TableHead>
             <TableHead className="px-6 py-3"></TableHead>
           </TableRow>
         </TableHeader>
@@ -123,96 +137,25 @@ const Clients = () => {
                 </button>
               </TableCell>
               <TableCell className="px-6 py-4 whitespace-nowrap">
-                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${client.status?.value === 'Ativo' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                  {client.status?.value}
+                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${client.status === 1 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                  {client.status === 1 ? 'Ativo' : 'Inativo'}
                 </span>
               </TableCell>
-              <TableCell className="px-6 py-4 whitespace-nowrap">{client.program?.value}</TableCell>
+              <TableCell className="px-6 py-4 whitespace-nowrap">
+                {client.program}
+              </TableCell>
               <TableCell className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                <button onClick={() => openModal(client)} className="text-indigo-600 hover:text-indigo-900">
-                  Editar
+                <button onClick={() => handleKanbanOpen(client)} className="text-indigo-600 hover:text-indigo-900">
+                  Dashboard
+                </button>
+                <button onClick={() => confirmDelete(client.id)} className="text-red-600 hover:text-red-900 ml-4">
+                  Excluir
                 </button>
               </TableCell>
             </TableRow>
           ))}
         </TableBody>
-      </Table>
-
-  
-      <Modal
-        isOpen={modalIsOpen}
-        onRequestClose={closeModal}
-        contentLabel="Editar Cliente"
-        className="fixed inset-0 flex items-center justify-center p-4"
-        overlayClassName="fixed inset-0 bg-black bg-opacity-50"
-      >
-        <div className="bg-white p-6 rounded shadow-lg max-w-lg w-full">
-          <h2 className="text-xl font-bold mb-4">Editar Cliente</h2>
-          {selectedClient && (
-            <>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700">Nome</label>
-                <input
-                  type="text"
-                  className="w-full px-3 py-2 border rounded"
-                  value={selectedClient.name}
-                  onChange={(e) => setSelectedClient({ ...selectedClient, name: e.target.value })}
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700">Telefone</label>
-                <input
-                  type="text"
-                  className="w-full px-3 py-2 border rounded"
-                  value={selectedClient.phone}
-                  onChange={(e) => setSelectedClient({ ...selectedClient, phone: e.target.value })}
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700">E-mail</label>
-                <input
-                  type="email"
-                  className="w-full px-3 py-2 border rounded"
-                  value={selectedClient.email}
-                  onChange={(e) => setSelectedClient({ ...selectedClient, email: e.target.value })}
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700">Status</label>
-                <Select
-                  value={statusOptions.find(option => option.value === selectedClient.status?.value)}
-                  onChange={(selectedOption) => setSelectedClient({ ...selectedClient, status: { value: selectedOption.value } })}
-                  options={statusOptions}
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700">Programa</label>
-                <Select
-                  value={programOptions.find(option => option.value === selectedClient.program?.value)}
-                  onChange={(selectedOption) => setSelectedClient({ ...selectedClient, program: { value: selectedOption.value } })}
-                  options={programOptions}
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700">Turma</label>
-                <Select
-                  value={classOptions.find(option => option.value === selectedClient.class?.value)}
-                  onChange={(selectedOption) => setSelectedClient({ ...selectedClient, class: { value: selectedOption.value } })}
-                  options={classOptions}
-                />
-              </div>
-              <div className="flex justify-end">
-                <button onClick={closeModal} className="bg-gray-500 text-white px-4 py-2 rounded mr-2">
-                  Cancelar
-                </button>
-                <button onClick={handleSave} className="bg-blue-500 text-white px-4 py-2 rounded">
-                  Salvar
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      </Modal>
+    </Table>
     </div>
   );
   

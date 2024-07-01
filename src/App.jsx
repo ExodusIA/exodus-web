@@ -10,6 +10,7 @@ import Kanban from './pages/Kanban';
 import ProgramList from './pages/ProgramList';
 import ProgramCreate from './pages/ProgramCreate';
 import ProgramTasks from './pages/ProgramTasks';
+import ProgramDetails from './pages/ProgramDetails';
 
 const App = () => {
   return (
@@ -23,6 +24,7 @@ const App = () => {
             <Route path="/clients/:clientName" element={<Kanban />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/programs" element={<ProgramList />} />
+            <Route path="/programs/:programId" element={<ProgramDetails />} />
             <Route path="/programs/new" element={<ProgramCreate />} />
             <Route path="/programs/:programName/tasks" element={<ProgramTasks />} />
             <Route path="/automations" element={<Automations />} />

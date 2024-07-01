@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import { getPrograms, deleteProgram } from '../firebase/firebaseServices'; // Certifique-se de que o caminho está correto
 import { slug } from '../utils/slug';
-import { EyeOpenIcon, Cross1Icon, PlusCircledIcon, CheckIcon, TrashIcon } from '@radix-ui/react-icons';
+import { EyeOpenIcon, TrashIcon, PaperPlaneIcon } from '@radix-ui/react-icons';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 const Programs = () => {
@@ -11,17 +11,8 @@ const Programs = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      try {
-        const response = await axios.get('https://api.baserow.io/api/database/rows/table/308790/?user_field_names=true', {
-          headers: {
-            Authorization: `Token ksKlG2r9Ezpl22Sk2kBgATPFHZgIhyrL` // Use a variável de ambiente
-          }
-        });
-
-        setPrograms(response.data.results);
-      } catch (error) {
-        console.error('Error fetching data:', error);
-      }
+      const programsList = await getPrograms();
+      setPrograms(programsList);
     };
 
     fetchData();
@@ -36,15 +27,10 @@ const Programs = () => {
   };
 
   const handleDeleteProgram = async (id) => {
-    try {
-      await axios.delete(`https://api.baserow.io/api/database/rows/table/308790/${id}/`, {
-        headers: {
-          Authorization: 'Token ksKlG2r9Ezpl22Sk2kBgATPFHZgIhyrL'
-        }
-      });
+    const confirmAction = window.confirm("Você tem certeza que deseja excluir este programa?");
+    if (confirmAction) {
+      await deleteProgram(id);
       setPrograms(programs.filter(program => program.id !== id));
-    } catch (error) {
-      console.error('Error deleting program:', error);
     }
   };
 
@@ -79,7 +65,7 @@ const Programs = () => {
                   <EyeOpenIcon className="h-5 w-5" />
                 </button>
                 <button className="text-green-500 hover:text-green-700 mr-2" onClick={() => handleApplyProgram(program)}>
-                  <CheckIcon className="h-5 w-5" />
+                  <PaperPlaneIcon className="h-5 w-5" />
                 </button>
                 <button className="text-red-500 hover:text-red-700" onClick={() => handleDeleteProgram(program.id)}>
                   <TrashIcon className="h-5 w-5" />
