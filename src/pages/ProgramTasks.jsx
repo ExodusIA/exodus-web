@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { PlusIcon } from '@radix-ui/react-icons';
 import { getProgramTasks, addProgramTask, updateProgramTask, deleteProgramTask, updateProgram, getClients, addClientProgram } from '../firebase/firebaseServices';
+import { format } from 'date-fns';
 
 Modal.setAppElement('#root');
 
@@ -150,7 +151,7 @@ const ProgramTasks = () => {
 
   const handleSendProgram = async () => {
     try {
-      const formattedDate = startDate.toISOString().split('T')[0];
+      const formattedDate = format(startDate, 'yyyy-MM-dd');
 
       await Promise.all(selectedClients.map(clientId => 
         addClientProgram({

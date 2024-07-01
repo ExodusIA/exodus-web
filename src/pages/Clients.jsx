@@ -1,36 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import Select from 'react-select';
 import Modal from 'react-modal';
 import { collection, getDocs, doc, updateDoc, deleteDoc } from "firebase/firestore";
-import { db } from '../../firebaseConfig'; // Importa a configuração do Firebase
+import { db } from '../../firebaseConfig';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { slug } from '../utils/slug';
+import { Button } from "@/components/ui/button"; // Adicione esta linha para importar o Button do shadcn
 
 // Defina o elemento principal do aplicativo para o modal
 Modal.setAppElement('#root');
-
-const statusOptions = [
-  { value: 'Ativo', label: 'Ativo' },
-  { value: 'Inativo', label: 'Inativo' },
-];
-
-const programOptions = [
-  { value: 'Mentoria', label: 'Mentoria' },
-  { value: 'Clube de Desafios', label: 'Clube de Desafios' },
-];
-
-const classOptions = [
-  { value: 'CERET - TERÇA E QUINTA - 6:45', label: 'CERET - TERÇA E QUINTA - 6:45' },
-  { value: 'CERET - SEGUNDA E QUARTA - 18:30', label: 'CERET - SEGUNDA E QUARTA - 18:30' },
-  { value: 'CERET - TERÇA E QUINTA - 8:15', label: 'CERET - TERÇA E QUINTA - 8:15' },
-  { value: 'CERET - TERÇA E QUINTA - 9:45 (TURMA 60+)', label: 'CERET - TERÇA E QUINTA - 9:45 (TURMA 60+)' },
-  { value: 'Mentoria Individual', label: 'Mentoria Individual' },
-  { value: 'Clube de Desafios', label: 'Clube de Desafios' },
-  { value: 'IBIRA', label: 'IBIRA' },
-  // Adicione outras opções conforme necessário
-];
 
 const Clients = () => {
   const [clients, setClients] = useState([]);
@@ -71,11 +49,11 @@ const Clients = () => {
           name: selectedClient.name,
           phone: selectedClient.phone,
           email: selectedClient.email,
-          status: selectedClient.status?.value,
-          program: selectedClient.program?.value,
-          class: selectedClient.class?.value,
+          status: selectedClient.status,
+          program: selectedClient.program,
+          class: selectedClient.class,
         });
-  
+
         setClients(clients.map(client => (client.id === selectedClient.id ? selectedClient : client)));
         closeModal();
         setSuccessMessage('Cliente atualizado com sucesso!');
@@ -109,9 +87,18 @@ const Clients = () => {
     navigate(`/clients/${slugName}`, { state: { clientData: client } });
   };
 
+  const handleAddClient = () => {
+    navigate('/clients/new');
+  };
+
   return (
     <div className="container mx-auto px-4">
-      <h1 className="text-2xl font-bold mb-4">Clientes</h1>
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-2xl font-bold">Clientes</h1>
+        <Button onClick={handleAddClient} className="bg-blue-500 hover:bg-blue-700 text-white py-2 px-4 rounded">
+          Adicionar Cliente
+        </Button>
+      </div>
       {successMessage && <div className="text-green-500">{successMessage}</div>}
       <Table className="min-w-full divide-y divide-gray-200">
         <TableHeader className="bg-gray-50">
@@ -155,10 +142,9 @@ const Clients = () => {
             </TableRow>
           ))}
         </TableBody>
-    </Table>
+      </Table>
     </div>
   );
-  
 };
 
 export default Clients;

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { getClientPrograms, deleteClientProgram } from '../firebase/firebaseServices';
-import { format, differenceInDays, isValid } from 'date-fns';
+import { format, differenceInDays, parseISO, isValid } from 'date-fns';
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -35,7 +35,7 @@ const Kanban = () => {
 
   const calculateStatus = (assignedDate, duration) => {
     const today = new Date();
-    const startDate = new Date(assignedDate);
+    const startDate = parseISO(assignedDate); // Parsing the date string to a Date object
     const daysPassed = differenceInDays(today, startDate);
     if (daysPassed < 0) return 'Não Iniciado';
     return daysPassed <= duration ? 'Ativo' : 'Concluído';
@@ -93,7 +93,7 @@ const Kanban = () => {
                   return (
                     <TableRow key={program.id}>
                       <TableCell>{program.programName}</TableCell>
-                      <TableCell>{isValid(new Date(program.assignedDate)) ? format(new Date(program.assignedDate), 'dd/MM/yyyy') : 'Data Inválida'}</TableCell>
+                      <TableCell>{isValid(parseISO(program.assignedDate)) ? format(parseISO(program.assignedDate), 'dd/MM/yyyy') : 'Data Inválida'}</TableCell>
                       <TableCell>{program.programDuration} dias</TableCell>
                       <TableCell>
                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusClass(status)}`}>
