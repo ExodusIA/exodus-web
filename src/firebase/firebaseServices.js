@@ -147,3 +147,13 @@ export const addCustomTask = async (clientProgramId, customTaskData) => {
     console.error("Error adding custom task: ", e);
   }
 };
+
+// Função para atualizar dados do cliente
+export const updateClient = async (clientId, clientData) => {
+  try {
+    const clientDoc = doc(db, "clients", clientId);
+    await updateDoc(clientDoc, clientData);
+  } catch (e) {
+    console.error("Error updating client: ", e);
+  }
+};
