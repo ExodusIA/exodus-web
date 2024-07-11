@@ -1,4 +1,3 @@
-// app/programs/page.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -30,9 +29,13 @@ const Programs = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      const programsList = await getPrograms();
-      setPrograms(programsList);
-      setFilteredPrograms(programsList);
+      try {
+        const programsList = await getPrograms();
+        setPrograms(programsList);
+        setFilteredPrograms(programsList);
+      } catch (error) {
+        console.error("Error fetching programs: ", error);
+      }
     };
 
     fetchData();
@@ -70,9 +73,13 @@ const Programs = () => {
       "Você tem certeza que deseja excluir este programa?"
     );
     if (confirmAction) {
-      await deleteProgram(id);
-      setPrograms(programs.filter((program) => program.id !== id));
-      setFilteredPrograms(filteredPrograms.filter((program) => program.id !== id));
+      try {
+        await deleteProgram(id);
+        setPrograms(programs.filter((program) => program.id !== id));
+        setFilteredPrograms(filteredPrograms.filter((program) => program.id !== id));
+      } catch (error) {
+        console.error("Error deleting program: ", error);
+      }
     }
   };
 
@@ -110,7 +117,7 @@ const Programs = () => {
                   ) : (
                     <ChevronDown className="inline" />
                   ))}
-              </TableHead>              
+              </TableHead>
               <TableHead
                 className="px-4 py-2 text-left cursor-pointer"
                 onClick={() => sortPrograms("duration")}
@@ -135,7 +142,7 @@ const Programs = () => {
               >
                 <TableCell className="px-4 py-2">
                   {program.name}
-                </TableCell>                
+                </TableCell>
                 <TableCell className="px-4 py-2">
                   {program.duration}
                 </TableCell>

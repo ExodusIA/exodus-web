@@ -38,16 +38,25 @@ const ProgramTasks = () => {
   useEffect(() => {
     if (program && program.id) {
       const loadTasks = async () => {
-        const tasksList = await getProgramTasks(program.id);
-        const tasksWithDetails = tasksList.map(task => ({
-          ...task,
-          week: Math.ceil(task.day / 7),
-          dayOfWeek: task.day % 7 || 7,
-        }));
+        try {
+          const tasksList = await getProgramTasks(program.id);
 
-        setTasks(tasksWithDetails);
-        const maxWeek = Math.max(...tasksWithDetails.map(task => task.week));
-        setWeeks(Array.from({ length: maxWeek }, (_, i) => i + 1));
+          if (tasksList.length === 0) {
+            setWeeks([1]); // Se não houver tarefas, exiba a primeira semana por padrão
+          } else {
+            const tasksWithDetails = tasksList.map(task => ({
+              ...task,
+              week: Math.ceil(task.day / 7),
+              dayOfWeek: task.day % 7 || 7,
+            }));
+
+            setTasks(tasksWithDetails);
+            const maxWeek = Math.max(...tasksWithDetails.map(task => task.week));
+            setWeeks(Array.from({ length: maxWeek }, (_, i) => i + 1));
+          }
+        } catch (error) {
+          console.error("Error fetching tasks:", error);
+        }
       };
 
       loadTasks();
@@ -143,9 +152,13 @@ const ProgramTasks = () => {
   };
 
   const openClientModal = async () => {
-    const clientsList = await getClients();
-    setClients(clientsList);
-    setClientModalIsOpen(true);
+    try {
+      const clientsList = await getClients();
+      setClients(clientsList);
+      setClientModalIsOpen(true);
+    } catch (error) {
+      console.error('Erro ao buscar clientes:', error);
+    }
   };
 
   const closeClientModal = () => {
@@ -166,12 +179,7 @@ const ProgramTasks = () => {
       const formattedDate = format(startDate, 'yyyy-MM-dd');
 
       await Promise.all(selectedClients.map(clientId => 
-        addClientProgram({
-          clientId,
-          programId: program.id,
-          assignedDate: formattedDate,
-          duration: tasks.length * 7
-        })
+        addClientProgram(clientId, program.id, formattedDate, tasks.length * 7)
       ));
 
       closeClientModal();

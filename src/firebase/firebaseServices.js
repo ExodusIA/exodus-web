@@ -2,7 +2,7 @@ import { collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, query, 
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { db } from "../../firebaseConfig"; // Certifique-se de que o caminho está correto para o seu arquivo de configuração do Firebase
 
-// Funções para manipular programas
+// Funções para manipular programs na coleção geral
 export const getPrograms = async () => {
   try {
     const querySnapshot = await getDocs(collection(db, "programs"));
@@ -39,7 +39,7 @@ export const deleteProgram = async (programId) => {
   }
 };
 
-// Funções para manipular tarefas dos programas
+// Funções para manipular tarefas dos programs na coleção geral
 export const getProgramTasks = async (programId) => {
   try {
     const querySnapshot = await getDocs(collection(db, "programs", programId, "programTasks"));
@@ -76,7 +76,7 @@ export const deleteProgramTask = async (programId, taskId) => {
   }
 };
 
-// Funções para buscar alunos
+// Funções para buscar clientes
 export const getClients = async () => {
   try {
     const querySnapshot = await getDocs(collection(db, "clients"));
@@ -88,10 +88,19 @@ export const getClients = async () => {
 };
 
 // Função para adicionar um programa a clientes
-export const addClientProgram = async (clientProgramData) => {
+export const addClientProgram = async (clientId, programId, assignedDate, duration) => {
   try {
-    const docRef = await addDoc(collection(db, "clientPrograms"), clientProgramData);
-    console.log("Document written with ID: ", docRef.id);
+    const programDoc = await getDoc(doc(db, "programs", programId));
+    const programData = programDoc.data();
+    
+    const clientProgramData = {
+      ...programData,
+      assignedDate,
+      duration,
+    };
+
+    const docRef = await addDoc(collection(db, "clients", clientId, "programs"), clientProgramData);
+    console.log("Program assigned with ID: ", docRef.id);
     return docRef.id;
   } catch (e) {
     console.error("Error adding document: ", e);
@@ -100,38 +109,27 @@ export const addClientProgram = async (clientProgramData) => {
 
 export const getClientPrograms = async (clientId) => {
   try {
-    const q = query(collection(db, "clientPrograms"), where("clientId", "==", clientId));
-    const querySnapshot = await getDocs(q);
-    const programsList = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-
-    // Fetch program names and durations
-    const programsWithDetails = await Promise.all(
-      programsList.map(async (program) => {
-        const programDoc = await getDoc(doc(db, "programs", program.programId));
-        const programData = programDoc.data();
-        return { ...program, programName: programData.name, programDuration: programData.duration };
-      })
-    );
-
-    return programsWithDetails;
+    const programsSnapshot = await getDocs(collection(db, "clients", clientId, "programs"));
+    const programsList = programsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    return programsList;
   } catch (e) {
     console.error("Error getting documents: ", e);
   }
 };
 
-export const deleteClientProgram = async (clientProgramId) => {
+export const deleteClientProgram = async (clientId, clientProgramId) => {
   try {
-    await deleteDoc(doc(db, "clientPrograms", clientProgramId));
+    await deleteDoc(doc(db, "clients", clientId, "programs", clientProgramId));
     console.log("Document deleted with ID: ", clientProgramId);
   } catch (e) {
     console.error("Error deleting document: ", e);
   }
 };
 
-// Função para buscar tarefas personalizadas
-export const getCustomTasks = async (clientProgramId) => {
+// Função para buscar tarefas personalizadas de um programa de cliente
+export const getCustomTasks = async (clientId, clientProgramId) => {
   try {
-    const customTasksSnapshot = await getDocs(collection(db, `clientPrograms/${clientProgramId}/customTasks`));
+    const customTasksSnapshot = await getDocs(collection(db, `clients/${clientId}/programs/${clientProgramId}/customTasks`));
     const customTasks = customTasksSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
     return customTasks;
   } catch (e) {
@@ -139,10 +137,10 @@ export const getCustomTasks = async (clientProgramId) => {
   }
 };
 
-// Função para adicionar uma tarefa personalizada
-export const addCustomTask = async (clientProgramId, customTaskData) => {
+// Função para adicionar uma tarefa personalizada a um programa de cliente
+export const addCustomTask = async (clientId, clientProgramId, customTaskData) => {
   try {
-    const docRef = await addDoc(collection(db, `clientPrograms/${clientProgramId}/customTasks`), customTaskData);
+    const docRef = await addDoc(collection(db, `clients/${clientId}/programs/${clientProgramId}/customTasks`), customTaskData);
     return { id: docRef.id, ...customTaskData };
   } catch (e) {
     console.error("Error adding custom task: ", e);
@@ -198,7 +196,7 @@ export const deleteClientGoal = async (clientId, goalId) => {
   }
 };
 
-// Função para adicionar exame
+// Função para adicionar exame a um cliente
 export const addClientExam = async (clientId, examData, file) => {
   try {
     const storage = getStorage();
@@ -220,7 +218,7 @@ export const addClientExam = async (clientId, examData, file) => {
   }
 };
 
-// Função para deletar exame
+// Função para deletar exame de um cliente
 export const deleteClientExam = async (clientId, examId, fileName) => {
   try {
     const storage = getStorage();
@@ -234,7 +232,7 @@ export const deleteClientExam = async (clientId, examId, fileName) => {
   }
 };
 
-// Função para obter exames do cliente
+// Função para obter exames de um cliente
 export const getClientExams = async (clientId) => {
   const examsSnapshot = await getDocs(collection(db, "clients", clientId, "exams"));
   const examsList = examsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
@@ -252,4 +250,3 @@ export const getSignedUrl = async (filePath) => {
     throw new Error('Failed to generate signed URL');
   }
 };
-

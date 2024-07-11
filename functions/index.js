@@ -29,3 +29,4 @@ exports.generateSignedUrl = functions.https.onRequest((req, res) => {
     }
   });
 });
+
