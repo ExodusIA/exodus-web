@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { PlusIcon } from '@radix-ui/react-icons';
+import { PlusIcon } from 'lucide-react';
 import { getProgramTasks, addProgramTask, updateProgramTask, deleteProgramTask, updateProgram, getClients, addClientProgram } from '../firebase/firebaseServices';
 import { format } from 'date-fns';
 
@@ -33,6 +33,7 @@ const ProgramTasks = () => {
   const [clients, setClients] = useState([]);
   const [selectedClients, setSelectedClients] = useState([]);
   const [startDate, setStartDate] = useState(new Date());
+  const [errors, setErrors] = useState({});
 
   useEffect(() => {
     if (program && program.id) {
@@ -77,9 +78,20 @@ const ProgramTasks = () => {
     setModalIsOpen(false);
     setSelectedTask(null);
     setNewTask({ taskName: '', taskDescription: '', day: 1, position: 1 });
+    setErrors({});
+  };
+
+  const validateTask = () => {
+    const newErrors = {};
+    if (!newTask.taskName) newErrors.taskName = 'Nome da Tarefa é obrigatório';
+    if (!newTask.taskDescription) newErrors.taskDescription = 'Descrição da Tarefa é obrigatória';
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSaveTask = async () => {
+    if (!validateTask()) return;
+
     try {
       const taskData = {
         taskName: newTask.taskName,
@@ -104,7 +116,7 @@ const ProgramTasks = () => {
       setTasks(updatedTasks);
       closeModal();
     } catch (error) {
-      console.error('Error saving task:', error);
+      console.error('Erro ao salvar tarefa:', error);
     }
   };
 
@@ -114,7 +126,7 @@ const ProgramTasks = () => {
       setTasks(tasks.filter(task => task.id !== taskId));
       closeModal();
     } catch (error) {
-      console.error('Error deleting task:', error);
+      console.error('Erro ao excluir tarefa:', error);
     }
   };
 
@@ -126,7 +138,7 @@ const ProgramTasks = () => {
     try {
       await updateProgram(program.id, program);
     } catch (error) {
-      console.error('Error updating program:', error);
+      console.error('Erro ao atualizar programa:', error);
     }
   };
 
@@ -164,15 +176,15 @@ const ProgramTasks = () => {
 
       closeClientModal();
     } catch (error) {
-      console.error('Error sending program:', error);
+      console.error('Erro ao enviar programa:', error);
     }
   };
 
   return (
-    <div className="container mx-auto px-4">
-      <div className="flex justify-between items-center mb-4">
+    <div className="container mx-auto px-4 py-6">
+      <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Programa: {program.name}</h1>
-        <Button onClick={openClientModal} className="bg-green-500 hover:bg-green-700 text-white py-2 px-4 rounded">
+        <Button onClick={openClientModal} >
           Enviar Programa
         </Button>
       </div>
@@ -228,7 +240,7 @@ const ProgramTasks = () => {
           </div>
         ))}
         <div className="flex justify-end mt-4">
-          <Button onClick={addWeek} className="bg-blue-500 hover:bg-blue-700 text-white py-1 px-3 rounded">
+          <Button onClick={addWeek} >
             Adicionar Semana
           </Button>
         </div>
@@ -250,26 +262,28 @@ const ProgramTasks = () => {
               value={newTask.taskName}
               onChange={(e) => setNewTask({ ...newTask, taskName: e.target.value })}
             />
+            {errors.taskName && <p className="text-red-500 text-xs italic">{errors.taskName}</p>}
           </div>
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700">Descrição da Tarefa (Markdown)</label>
+            <label className="block text-sm font-medium text-gray-700">Descrição da Tarefa</label>
             <Textarea
               value={newTask.taskDescription}
               onChange={(e) => setNewTask({ ...newTask, taskDescription: e.target.value })}
             />
+            {errors.taskDescription && <p className="text-red-500 text-xs italic">{errors.taskDescription}</p>}
           </div>
           <div className="flex justify-between">
             {selectedTask && (
-              <Button onClick={() => handleDeleteTask(selectedTask.id)} variant="destructive" className="mr-2">
-                Delete
+              <Button onClick={() => handleDeleteTask(selectedTask.id)} variant="destructive" className="text-red-500 py-1 px-3 rounded mr-2">
+                Deletar
               </Button>
             )}
-            <div className="flex">
-              <Button onClick={closeModal} variant="secondary" className="mr-2">
-                Cancel
+            <div className="flex gap-2">
+              <Button onClick={closeModal}>
+                Cancelar
               </Button>
-              <Button onClick={handleSaveTask}>
-                Save
+              <Button onClick={handleSaveTask} >
+                Salvar
               </Button>
             </div>
           </div>
@@ -307,7 +321,7 @@ const ProgramTasks = () => {
             />
           </div>
           <div className="flex justify-end">
-            <Button onClick={closeClientModal} variant="secondary" className="mr-2">
+            <Button onClick={closeClientModal} variant="secondary" className="bg-gray-500 hover:bg-gray-700 text-white py-1 px-3 rounded mr-2">
               Cancelar
             </Button>
             <Button onClick={handleSendProgram} className="bg-blue-500 hover:bg-blue-700 text-white py-1 px-3 rounded">

@@ -2,25 +2,29 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
+import { getFunctions, httpsCallable } from "firebase/functions";
+
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyClkjqMCWRgCEi8mPGanZZkD7XPi8Wf7Dk",
-  authDomain: "exodus-c5202.firebaseapp.com",
-  projectId: "exodus-c5202",
-  storageBucket: "exodus-c5202.appspot.com",
-  messagingSenderId: "183924171339",
-  appId: "1:183924171339:web:f43715a20de002184de3ce",
-  measurementId: "G-65DZD1X1NT"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
+
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
 const db = getFirestore(app);
 const auth = getAuth(app);
+const functions = getFunctions(app); // Inicialização do módulo de funções
 
-export { db, auth };
+export { db, auth, functions, httpsCallable };
