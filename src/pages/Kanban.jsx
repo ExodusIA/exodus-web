@@ -1,15 +1,32 @@
-import React, { useState, useEffect } from 'react';
+"use client";
+
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import Select from 'react-select';
 import Modal from 'react-modal';
-import { format, parseISO, isValid, differenceInMonths } from 'date-fns';
+import { format, parseISO, isValid, differenceInMonths, addHours } from 'date-fns';
 import { Timestamp } from 'firebase/firestore';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { getClientPrograms, updateClient, getSignedUrl, deleteClientProgram, getClientGoals, addClientGoal, updateClientGoal, deleteClientGoal, addClientExam, deleteClientExam, getClientExams } from '../firebase/firebaseServices';
+import {
+  getClientPrograms,
+  updateClient,
+  deleteClientProgram,
+  getClientGoals,
+  addClientGoal,
+  updateClientGoal,
+  deleteClientGoal,
+  addClientExam,
+  deleteClientExam,
+  getClientExams,
+  getPrograms,
+  addClientProgram,
+  getProgramLastTaskDay
+} from '../firebase/firebaseServices';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TrashIcon } from '@radix-ui/react-icons';
-import { functions, httpsCallable } from '../../firebaseConfig'; // Importação do módulo de funções
+import { DatePickerDemo } from "@/components/ui/date-picker-demo";
+import { ChevronDown, ChevronUp } from 'lucide-react';
 
 const statusOptions = [
   { value: 1, label: 'Ativo' },
@@ -23,7 +40,7 @@ const programOptions = [
 
 const classOptions = [
   { value: 'CERET - TERÇA E QUINTA - 6:45', label: 'CERET - TERÇA E QUINTA - 6:45' },
-  { value: 'CERET - SEGUNDA E QUARTA - 18:30', label: 'CERET - SEGUNDA E QUARTA - 18:30' },
+  { value: 'CERET - SEGUNDA E QUARTA - 18:30', label: 'CERET - SEGUNDA E QUINTA - 18:30' },
   { value: 'CERET - TERÇA E QUINTA - 8:15', label: 'CERET - TERÇA E QUINTA - 8:15' },
   { value: 'CERET - TERÇA E QUINTA - 9:45 (TURMA 60+)', label: 'CERET - TERÇA E QUINTA - 9:45 (TURMA 60+)' },
   { value: 'Mentoria Individual', label: 'Mentoria Individual' },
@@ -36,7 +53,7 @@ const examOptions = [
   { value: 'Bioimpedância', label: 'Bioimpedância' },
   { value: 'Ergoespirograma', label: 'Ergoespirograma' },
   { value: 'Exame de sangue', label: 'Exame de sangue' },
-  { value: 'Other', label: 'Other' },
+  { value: 'Outro', label: 'Outro' },
 ];
 
 const Kanban = () => {
@@ -45,6 +62,14 @@ const Kanban = () => {
   const [clientData, setClientData] = useState(initialClientData);
   const [programs, setPrograms] = useState([]);
   const [modalIsOpen, setModalIsOpen] = useState(false);
+  const [programTasksModalIsOpen, setProgramTasksModalIsOpen] = useState(false);
+  const [customTaskModalIsOpen, setCustomTaskModalIsOpen] = useState(false);
+  const [selectedProgram, setSelectedProgram] = useState(null);
+  const [selectedCustomTask, setSelectedCustomTask] = useState(null);
+  const [tasks, setTasks] = useState([]);
+  const [customTasks, setCustomTasks] = useState([]);
+  const [newCustomTask, setNewCustomTask] = useState([]);
+  const [programTasks, setProgramTasks] = useState([]);
   const [client, setClient] = useState(initialClientData);
   const [successMessage, setSuccessMessage] = useState('');
   const [goals, setGoals] = useState([]);
@@ -55,6 +80,11 @@ const Kanban = () => {
   const [examModalIsOpen, setExamModalIsOpen] = useState(false);
   const [errors, setErrors] = useState({});
   const [otherExamType, setOtherExamType] = useState("");
+  const [allPrograms, setAllPrograms] = useState([]);
+  const [sendProgramModalIsOpen, setSendProgramModalIsOpen] = useState(false);
+  const [selectedProgramToSend, setSelectedProgramToSend] = useState(null);
+  const [programStartDate, setProgramStartDate] = useState(new Date());
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
 
   useEffect(() => {
     const fetchPrograms = async () => {
@@ -90,6 +120,15 @@ const Kanban = () => {
   }, [clientData]);
 
   useEffect(() => {
+    const fetchAllPrograms = async () => {
+      const programsList = await getPrograms();
+      setAllPrograms(programsList);
+    };
+
+    fetchAllPrograms();
+  }, []);
+
+  useEffect(() => {
     if (modalIsOpen) {
       setClient(clientData);
     }
@@ -120,14 +159,14 @@ const Kanban = () => {
     if (!validateClient()) return;
 
     try {
-      const { id, ...clientDataToUpdate } = client; // Remove o campo id
-      await updateClient(id, clientDataToUpdate); // Envia o objeto sem o campo id para atualização
+      const { id, ...clientDataToUpdate } = client; // Remove the id field
+      await updateClient(id, clientDataToUpdate); // Update client data
       setSuccessMessage('Cliente atualizado com sucesso!');
       setTimeout(() => {
         setSuccessMessage('');
       }, 3000);
       setModalIsOpen(false);
-      setClientData({ ...client, id }); // Atualiza o estado do clientData com os novos dados do cliente
+      setClientData({ ...client, id }); // Update clientData state
     } catch (error) {
       console.error('Error updating client:', error);
     }
@@ -137,7 +176,7 @@ const Kanban = () => {
     try {
       const confirmAction = window.confirm("Você tem certeza que deseja excluir este programa?");
       if (confirmAction) {
-        await deleteClientProgram(clientProgramId);
+        await deleteClientProgram(clientData.id, clientProgramId);
         setPrograms(programs.filter(program => program.id !== clientProgramId));
       }
     } catch (error) {
@@ -145,20 +184,29 @@ const Kanban = () => {
     }
   };
 
-  const calculateStatus = (assignedDate, duration) => {
+  const calculateStatus = (startDate, lastTaskDay) => {
     const today = new Date();
-    const startDate = assignedDate.toDate ? assignedDate.toDate() : new Date(assignedDate);
-    const daysPassed = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
+  
+    if (!startDate) return 'Data Indisponível';
+  
+    const start = startDate.toDate ? startDate.toDate() : new Date(startDate);
+  
+    today.setHours(0, 0, 0, 0);
+    start.setHours(0, 0, 0, 0);
+  
+    const daysPassed = Math.floor((today - start) / (1000 * 60 * 60 * 24));
     if (daysPassed < 0) return 'Não Iniciado';
-    return daysPassed <= duration ? 'Ativo' : 'Concluído';
+    return daysPassed <= lastTaskDay ? 'Em andamento' : 'Concluído';
   };
 
   const getStatusClass = (status) => {
     switch (status) {
       case 'Ativo':
         return 'bg-green-100 text-green-800';
+      case 'Em andamento':
+        return 'bg-blue-100 text-blue-800';
       case 'Concluído':
-        return 'bg-red-100 text-red-800';
+        return 'bg-green-100 text-green-800';
       case 'Não Iniciado':
         return 'bg-yellow-100 text-yellow-800';
       case 'Inativo':
@@ -166,6 +214,17 @@ const Kanban = () => {
       default:
         return '';
     }
+  };
+
+  const calculateCurrentDay = (startDate) => {
+    const today = new Date();
+    const start = startDate.toDate ? startDate.toDate() : new Date(startDate);
+  
+    today.setHours(0, 0, 0, 0);
+    start.setHours(0, 0, 0, 0);
+  
+    const daysPassed = Math.floor((today - start) / (1000 * 60 * 60 * 24));
+    return daysPassed + 1; // Adiciona 1 porque a contagem de dias começa a partir do primeiro dia
   };
 
   const validateGoal = () => {
@@ -176,7 +235,6 @@ const Kanban = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  // Funções de manipulação de metas
   const handleAddGoal = async () => {
     if (!validateGoal()) return;
 
@@ -267,11 +325,7 @@ const Kanban = () => {
       console.error('Error opening PDF:', error);
     }
   };
-  
 
-  
-  
-  
   const checkExamValidity = (examDate, examType) => {
     const currentDate = new Date();
     const examDateObject = examDate.toDate ? examDate.toDate() : new Date(examDate);
@@ -283,7 +337,78 @@ const Kanban = () => {
   
     return monthsDifference <= 12 ? "Válido" : "Inválido";
   };
-  
+
+  const openSendProgramModal = () => {
+    setSendProgramModalIsOpen(true);
+  };
+
+  const closeSendProgramModal = () => {
+    setSendProgramModalIsOpen(false);
+  };
+
+  const handleSendProgram = async () => {
+    if (!programStartDate || !selectedProgramToSend) {
+      setErrors({
+        programStartDate: !programStartDate ? 'Data de início é obrigatória' : '',
+        selectedProgramToSend: !selectedProgramToSend ? 'Programa é obrigatório' : '',
+      });
+      return;
+    }
+
+    try {
+      const formattedDate = addHours(programStartDate, programStartDate.getTimezoneOffset() / 60);
+
+      const newProgram = await addClientProgram(clientData.id, selectedProgramToSend.id, formattedDate.toISOString());
+
+      // Encontrar o nome do programa a partir de allPrograms
+      const programName = allPrograms.find(program => program.id === selectedProgramToSend.id)?.name || 'Programa Desconhecido';
+      const programId = allPrograms.find(program => program.id === selectedProgramToSend.id)?.id || 'Programa Desconhecido';
+
+      // Calcular status e dia atual
+      const lastTaskDay = await getProgramLastTaskDay(programId);
+      const status = calculateStatus(newProgram.startDate, lastTaskDay);
+      const currentDay = calculateCurrentDay(newProgram.startDate);
+
+      const programWithDetails = {
+        ...newProgram,
+        programName,
+        lastTaskDay,
+        status,
+        currentDay
+      };
+
+      setPrograms(prevPrograms => [...prevPrograms, programWithDetails]);
+      setSendProgramModalIsOpen(false);
+    } catch (error) {
+      console.error('Erro ao enviar programa:', error);
+    }
+  };
+
+  const sortData = (data, key, direction) => {    
+    const sortedData = [...data].sort((a, b) => {
+      if (a[key] < b[key]) {
+        return direction === 'ascending' ? -1 : 1;
+      }
+      if (a[key] > b[key]) {
+        return direction === 'ascending' ? 1 : -1;
+      }
+      return 0;
+    });
+
+    return sortedData;
+  };
+
+  const sortedPrograms = useMemo(() => sortConfig.key ? sortData(programs, sortConfig.key, sortConfig.direction) : programs, [programs, sortConfig]);
+  const sortedGoals = useMemo(() => sortConfig.key ? sortData(goals, sortConfig.key, sortConfig.direction) : goals, [goals, sortConfig]);
+  const sortedExams = useMemo(() => sortConfig.key ? sortData(exams, sortConfig.key, sortConfig.direction) : exams, [exams, sortConfig]);
+
+  const requestSort = (key) => {
+    let direction = 'ascending';
+    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -296,15 +421,25 @@ const Kanban = () => {
             </Button>
           </div>
           <div>
-            <p><strong>Nome:</strong> {clientData.name}</p>
-            <p><strong>Apelido:</strong> {clientData.nickName}</p>
-            <p><strong>Telefone:</strong> {clientData.phone}</p>
-            <p><strong>E-mail:</strong> {clientData.email}</p>
-            <p><strong>Status: </strong> 
-              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusClass(clientData.status === 1 ? 'Ativo' : 'Inativo')}`}>
-                {clientData.status === 1 ? 'Ativo' : 'Inativo'}
-              </span>
-            </p>
+            <div className="mb-2">
+              <p><strong>Nome:</strong> {clientData.name}</p>
+            </div>
+            <div className="mb-2">
+              <p><strong>Apelido:</strong> {clientData.nickName}</p>
+            </div>
+            <div className="mb-2">
+              <p><strong>Telefone:</strong> {clientData.phone}</p>
+            </div>
+            <div className="mb-2">
+              <p><strong>E-mail:</strong> {clientData.email}</p>
+            </div>
+            <div className="mb-2">
+              <p><strong>Status: </strong> 
+                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusClass(clientData.status === 1 ? 'Ativo' : 'Inativo')}`}>
+                  {clientData.status === 1 ? 'Ativo' : 'Inativo'}
+                </span>
+              </p>
+            </div>
           </div>
         </div>
         <div className="bg-white p-6 rounded shadow-md">
@@ -314,19 +449,21 @@ const Kanban = () => {
               Adicionar Exame
             </Button>
           </div>
-          <div className="max-h-44 overflow-y-auto">
+          <div className="max-h-48 overflow-y-auto">
             <Table className="min-w-full">
               <TableHeader>
                 <TableRow>
-                  <TableHead>Tipo de Exame</TableHead>
-                  <TableHead>Data de Realização</TableHead>
-                  <TableHead>Validade</TableHead>
+                  <TableHead onClick={() => requestSort('type')}>
+                    Tipo de Exame {sortConfig.key === 'type' && (sortConfig.direction === 'ascending' ? <ChevronUp className="inline" /> : <ChevronDown className="inline" />)}
+                  </TableHead>
+                  <TableHead onClick={() => requestSort('date')}>Data de Realização {sortConfig.key === 'date' && (sortConfig.direction === 'ascending' ? <ChevronUp className="inline" /> : <ChevronDown className="inline" />)}</TableHead>
+                  <TableHead onClick={() => requestSort('validity')}>Validade {sortConfig.key === 'validity' && (sortConfig.direction === 'ascending' ? <ChevronUp className="inline" /> : <ChevronDown className="inline" />)}</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {exams.length > 0 ? (
-                  exams.map((exam) => {
+                {sortedExams.length > 0 ? (
+                  sortedExams.map((exam) => {
                     const validityStatus = checkExamValidity(exam.date, exam.type);                    
                     return (
                       <TableRow key={exam.id} className="hover:bg-gray-100 cursor-pointer" onClick={() => handleOpenPDF(exam.filePath)}>
@@ -359,50 +496,59 @@ const Kanban = () => {
         </div>
         <div className="bg-white p-6 rounded shadow-md">
           <h2 className="text-xl font-bold mb-4">Resultados e Reflexões</h2>
-          {/* Lógica para exibir resultados e reflexões */}
+          <h2 className="text-6xl font-bold mb-4">Em breve</h2>
         </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <div className="bg-white p-6 rounded shadow-md md:col-span-2 relative">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold">Programas</h2>
+            <Button onClick={openSendProgramModal}>
+              Enviar Programa
+            </Button>
           </div>
           <div className="overflow-x-auto">
             <Table className="min-w-full">
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nome do Programa</TableHead>
-                  <TableHead>Data de Início</TableHead>
-                  <TableHead>Duração</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead onClick={() => requestSort('programName')}>Nome do Programa {sortConfig.key === 'programName' && (sortConfig.direction === 'ascending' ? <ChevronUp className="inline" /> : <ChevronDown className="inline" />)}</TableHead>
+                  <TableHead onClick={() => requestSort('startDate')}>Data de Início {sortConfig.key === 'startDate' && (sortConfig.direction === 'ascending' ? <ChevronUp className="inline" /> : <ChevronDown className="inline" />)}</TableHead>
+                  <TableHead onClick={() => requestSort('currentDay')}>Dia Atual {sortConfig.key === 'currentDay' && (sortConfig.direction === 'ascending' ? <ChevronUp className="inline" /> : <ChevronDown className="inline" />)}</TableHead>
+                  <TableHead onClick={() => requestSort('lastTaskDay')}>Duração {sortConfig.key === 'lastTaskDay' && (sortConfig.direction === 'ascending' ? <ChevronUp className="inline" /> : <ChevronDown className="inline" />)}</TableHead>
+                  <TableHead onClick={() => requestSort('status')}>Status {sortConfig.key === 'status' && (sortConfig.direction === 'ascending' ? <ChevronUp className="inline" /> : <ChevronDown className="inline" />)}</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {programs.length > 0 ? (
-                  programs.map((program) => {
-                    const status = calculateStatus(program.assignedDate, program.programDuration);
+                {sortedPrograms.length > 0 ? (
+                  sortedPrograms.map((program) => {
+                    const status = calculateStatus(program.startDate, program.lastTaskDay);
+                    const currentDay = calculateCurrentDay(program.startDate);
                     return (
-                      <TableRow key={program.id}>
+                      <TableRow key={program.id} className="hover:bg-gray-100 cursor-pointer">
                         <TableCell>{program.programName}</TableCell>
-                        <TableCell>{program.assignedDate ? format(parseISO(program.assignedDate.toDate ? program.assignedDate.toDate().toISOString() : program.assignedDate), 'dd/MM/yyyy') : 'Data Inválida'}</TableCell>
-                        <TableCell>{program.programDuration} dias</TableCell>
+                        <TableCell>{program.startDate ? format(parseISO(program.startDate.toDate ? program.startDate.toDate().toISOString() : program.startDate), 'dd/MM/yyyy') : 'Data Inválida'}</TableCell>
+                        <TableCell>
+                          {currentDay <= 0 ? 'Não iniciado' : (currentDay > program.lastTaskDay ? 'Finalizado' : `${currentDay}º dia`)}
+                        </TableCell>
+                        <TableCell>{program.lastTaskDay} {program.lastTaskDay === 1 ? 'dia' : 'dias'}</TableCell>
                         <TableCell>
                           <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusClass(status)}`}>
                             {status}
                           </span>
                         </TableCell>
-                        <TableCell className="text-right">
-                          <Button onClick={() => handleDeleteProgram(program.id)} className="bg-red-500 hover:bg-red-700 text-white py-1 px-3 rounded">
-                            Excluir
-                          </Button>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <TrashIcon
+                            onClick={() => handleDeleteProgram(program.id)}
+                            className="text-red-500 cursor-pointer"
+                          />
                         </TableCell>
                       </TableRow>
                     );
                   })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan="5" className="text-center">Nenhum programa ativo</TableCell>
+                    <TableCell colSpan="6" className="text-center">Nenhum programa ativo</TableCell>
                   </TableRow>
                 )}
               </TableBody>
@@ -416,32 +562,40 @@ const Kanban = () => {
               Adicionar Meta
             </Button>
           </div>
-          <div>
+          <div className="max-h-48 overflow-y-auto">
             <Table className="min-w-full">
               <TableHeader>
                 <TableRow>
-                  <TableHead></TableHead>
-                  <TableHead>Meta</TableHead>
-                  <TableHead>Prazo</TableHead>
+                  <TableHead onClick={() => requestSort('goal')}></TableHead>
+                  <TableHead onClick={() => requestSort('goal')}>Meta {sortConfig.key === 'goal' && (sortConfig.direction === 'ascending' ? <ChevronUp className="inline" /> : <ChevronDown className="inline" />)}</TableHead>
+                  <TableHead onClick={() => requestSort('deadline')}>Prazo {sortConfig.key === 'deadline' && (sortConfig.direction === 'ascending' ? <ChevronUp className="inline" /> : <ChevronDown className="inline" />)}</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {goals.length > 0 ? (
-                  goals.map((goal) => (
-                    <TableRow key={goal.id} className={goal.completed ? 'line-through text-gray-500' : ''}>
+                {sortedGoals.length > 0 ? (
+                  sortedGoals.map((goal) => (
+                    <TableRow 
+                      key={goal.id} 
+                      className={`hover:bg-gray-100 cursor-pointer ${goal.completed ? 'line-through text-gray-500' : ''}`} 
+                      onClick={() => handleUpdateGoal(goal.id, { completed: !goal.completed })}
+                    >
                       <TableCell>
                         <input
                           type="checkbox"
                           checked={goal.completed}
                           onChange={(e) => handleUpdateGoal(goal.id, { completed: e.target.checked })}
+                          onClick={(e) => e.stopPropagation()} // Previene que o clique no checkbox também dispare o clique na linha
                         />
                       </TableCell>
                       <TableCell>{goal.goal}</TableCell>
                       <TableCell>{goal.deadline ? format(parseISO(goal.deadline.toDate ? goal.deadline.toDate().toISOString() : goal.deadline), 'dd/MM/yyyy') : 'Data Inválida'}</TableCell>
                       <TableCell>
                         <TrashIcon
-                          onClick={() => handleDeleteGoal(goal.id)}
+                          onClick={(e) => {
+                            e.stopPropagation(); // Previene que o clique no ícone também dispare o clique na linha
+                            handleDeleteGoal(goal.id);
+                          }}
                           className="text-red-500 cursor-pointer"
                         />
                       </TableCell>
@@ -659,6 +813,43 @@ const Kanban = () => {
                 Adicionar
               </Button>
             </div>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal for Sending Program */}
+      <Modal
+        isOpen={sendProgramModalIsOpen}
+        onRequestClose={closeSendProgramModal}
+        contentLabel="Enviar Programa"
+        className="fixed inset-0 flex items-center justify-center p-4"
+        overlayClassName="fixed inset-0 bg-black bg-opacity-50"
+      >
+        <div className="bg-white p-6 rounded shadow-lg max-w-lg w-full">
+          <h2 className="text-xl font-bold mb-4">Enviar Programa</h2>
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700">Data de Início</label>
+            <DatePickerDemo selectedDate={programStartDate} setSelectedDate={setProgramStartDate} />
+            {errors.programStartDate && <p className="text-red-500 text-xs italic">{errors.programStartDate}</p>}
+          </div>
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700">Selecione um Programa</label>
+            <Select
+              options={allPrograms.map(program => ({ value: program.id, label: program.name }))}
+              onChange={(selectedOption) => {
+                const selectedProgram = allPrograms.find(program => program.id === selectedOption.value);
+                setSelectedProgramToSend(selectedProgram);
+              }}
+            />
+            {errors.selectedProgramToSend && <p className="text-red-500 text-xs italic">{errors.selectedProgramToSend}</p>}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button onClick={closeSendProgramModal}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSendProgram}>
+              Enviar
+            </Button>
           </div>
         </div>
       </Modal>

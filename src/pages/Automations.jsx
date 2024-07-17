@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import Modal from 'react-modal';
+import { Button } from "@/components/ui/button";
 
 Modal.setAppElement('#root');
 
@@ -97,9 +98,9 @@ const Automations = () => {
 
   return (
     <div>
-      <button onClick={openModal} className="bg-blue-500 text-white px-4 py-2 rounded">
+      <Button onClick={openModal}>
         Enviar Mensagem
-      </button>
+      </Button>
       <Modal
         isOpen={modalIsOpen}
         onRequestClose={closeModal}

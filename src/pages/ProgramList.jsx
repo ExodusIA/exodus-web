@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
-import { getPrograms, deleteProgram } from "../firebase/firebaseServices";
+import { getPrograms, deleteProgram, getProgramLastTaskDay } from "../firebase/programService";
 import { slug } from "../utils/slug";
 import { TrashIcon } from "@radix-ui/react-icons";
 import {
@@ -31,8 +31,14 @@ const Programs = () => {
     const fetchData = async () => {
       try {
         const programsList = await getPrograms();
-        setPrograms(programsList);
-        setFilteredPrograms(programsList);
+        const programsWithDuration = await Promise.all(
+          programsList.map(async (program) => {
+            const duration = await getProgramLastTaskDay(program.id);
+            return { ...program, duration };
+          })
+        );
+        setPrograms(programsWithDuration);
+        setFilteredPrograms(programsWithDuration);
       } catch (error) {
         console.error("Error fetching programs: ", error);
       }
@@ -122,7 +128,7 @@ const Programs = () => {
                 className="px-4 py-2 text-left cursor-pointer"
                 onClick={() => sortPrograms("duration")}
               >
-                Duração (dias){" "}
+                Duração{" "}
                 {sortConfig.key === "duration" &&
                   (sortConfig.direction === "ascending" ? (
                     <ChevronUp className="inline" />
@@ -144,7 +150,7 @@ const Programs = () => {
                   {program.name}
                 </TableCell>
                 <TableCell className="px-4 py-2">
-                  {program.duration}
+                  {program.duration} {program.duration === 1 ? 'dia' : 'dias'}
                 </TableCell>
                 <TableCell
                   className="px-4 py-2 text-right"

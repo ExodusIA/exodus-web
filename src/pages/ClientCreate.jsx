@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, addDoc } from 'firebase/firestore';
-import { db } from '../../firebaseConfig';
+import { addClient } from '../firebase/clientService';
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 
 const AddClient = () => {
   const [name, setName] = useState('');
+  const [nickName, setNickname] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState(1);
@@ -17,8 +17,9 @@ const AddClient = () => {
 
   const handleSave = async () => {
     try {
-      await addDoc(collection(db, "clients"), {
+      await addClient({
         name,
+        nickName,
         phone,
         email,
         status,
@@ -40,6 +41,14 @@ const AddClient = () => {
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
+        />
+      </div>
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700">Apelido</label>
+        <Input
+          type="text"
+          value={nickName}
+          onChange={(e) => setNickname(e.target.value)}
         />
       </div>
       <div className="mb-4">
@@ -85,7 +94,7 @@ const AddClient = () => {
           onChange={(e) => setClassGroup(e.target.value)}
         />
       </div>
-      <Button onClick={handleSave} className="bg-blue-500 hover:bg-blue-700 text-white py-2 px-4 rounded">
+      <Button onClick={handleSave}>
         Salvar
       </Button>
     </div>

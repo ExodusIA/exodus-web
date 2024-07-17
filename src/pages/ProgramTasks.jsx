@@ -3,8 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import Modal from 'react-modal';
-import ReactDatePicker from 'react-datepicker';
-import 'react-datepicker/dist/react-datepicker.css';
+import { format, addHours, subHours } from 'date-fns';
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -15,8 +14,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { PlusIcon } from 'lucide-react';
-import { getProgramTasks, addProgramTask, updateProgramTask, deleteProgramTask, updateProgram, getClients, addClientProgram } from '../firebase/firebaseServices';
-import { format } from 'date-fns';
+import { getProgramTasks, addProgramTask, updateProgramTask, deleteProgramTask } from '../firebase/taskService';
+import { getClients, addClientProgram } from '../firebase/clientService';
+import { updateProgram } from '../firebase/programService';
+import { DatePickerDemo } from "@/components/ui/date-picker-demo";
 
 Modal.setAppElement('#root');
 
@@ -28,34 +29,30 @@ const ProgramTasks = () => {
   const [weeks, setWeeks] = useState([1]);
   const [modalIsOpen, setModalIsOpen] = useState(false);
   const [clientModalIsOpen, setClientModalIsOpen] = useState(false);
-  const [newTask, setNewTask] = useState({ taskName: '', taskDescription: '', day: 1, position: 1 });
+  const [newTask, setNewTask] = useState({ taskName: '', taskDescription: '', day: 1 });
   const [selectedTask, setSelectedTask] = useState(null);
   const [clients, setClients] = useState([]);
   const [selectedClients, setSelectedClients] = useState([]);
   const [startDate, setStartDate] = useState(new Date());
   const [errors, setErrors] = useState({});
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     if (program && program.id) {
       const loadTasks = async () => {
-        try {
-          const tasksList = await getProgramTasks(program.id);
+        const tasksList = await getProgramTasks(program.id);
+        if (tasksList.length === 0) {
+          setWeeks([1]); // Se não houver tarefas, exiba a primeira semana por padrão
+        } else {
+          const tasksWithDetails = tasksList.map(task => ({
+            ...task,
+            week: Math.ceil(task.day / 7),
+            dayOfWeek: task.day % 7 || 7,
+          }));
 
-          if (tasksList.length === 0) {
-            setWeeks([1]); // Se não houver tarefas, exiba a primeira semana por padrão
-          } else {
-            const tasksWithDetails = tasksList.map(task => ({
-              ...task,
-              week: Math.ceil(task.day / 7),
-              dayOfWeek: task.day % 7 || 7,
-            }));
-
-            setTasks(tasksWithDetails);
-            const maxWeek = Math.max(...tasksWithDetails.map(task => task.week));
-            setWeeks(Array.from({ length: maxWeek }, (_, i) => i + 1));
-          }
-        } catch (error) {
-          console.error("Error fetching tasks:", error);
+          setTasks(tasksWithDetails);
+          const maxWeek = Math.max(...tasksWithDetails.map(task => task.week));
+          setWeeks(Array.from({ length: maxWeek }, (_, i) => i + 1));
         }
       };
 
@@ -73,11 +70,10 @@ const ProgramTasks = () => {
         taskName: task.taskName,
         taskDescription: task.taskDescription,
         day: task.day,
-        position: task.position,
       });
       setSelectedTask(task);
     } else {
-      setNewTask({ taskName: '', taskDescription: '', day: (week - 1) * 7 + dayOfWeek, position: 1 });
+      setNewTask({ taskName: '', taskDescription: '', day: (week - 1) * 7 + dayOfWeek });
       setSelectedTask(null);
     }
     setModalIsOpen(true);
@@ -86,7 +82,7 @@ const ProgramTasks = () => {
   const closeModal = () => {
     setModalIsOpen(false);
     setSelectedTask(null);
-    setNewTask({ taskName: '', taskDescription: '', day: 1, position: 1 });
+    setNewTask({ taskName: '', taskDescription: '', day: 1 });
     setErrors({});
   };
 
@@ -106,7 +102,6 @@ const ProgramTasks = () => {
         taskName: newTask.taskName,
         taskDescription: newTask.taskDescription,
         day: newTask.day,
-        position: newTask.position,
       };
 
       let updatedTask;
@@ -152,13 +147,9 @@ const ProgramTasks = () => {
   };
 
   const openClientModal = async () => {
-    try {
-      const clientsList = await getClients();
-      setClients(clientsList);
-      setClientModalIsOpen(true);
-    } catch (error) {
-      console.error('Erro ao buscar clientes:', error);
-    }
+    const clientsList = await getClients();
+    setClients(clientsList);
+    setClientModalIsOpen(true);
   };
 
   const closeClientModal = () => {
@@ -176,10 +167,11 @@ const ProgramTasks = () => {
 
   const handleSendProgram = async () => {
     try {
-      const formattedDate = format(startDate, 'yyyy-MM-dd');
+      // Ajusta a data para garantir que está na meia-noite do fuso horário local
+      const adjustedStartDate = addHours(startDate, startDate.getTimezoneOffset() / 60);
 
       await Promise.all(selectedClients.map(clientId => 
-        addClientProgram(clientId, program.id, formattedDate, tasks.length * 7)
+        addClientProgram(clientId, program.id, adjustedStartDate.toISOString(), tasks.length * 7)
       ));
 
       closeClientModal();
@@ -306,33 +298,42 @@ const ProgramTasks = () => {
         overlayClassName="fixed inset-0 bg-black bg-opacity-50"
       >
         <div className="bg-white p-6 rounded shadow-lg max-w-lg w-full">
-          <h2 className="text-xl font-bold mb-4">Selecione os Alunos</h2>
-          <div className="mb-4 max-h-64 overflow-y-auto">
-            {clients.map(client => (
-              <div key={client.id} className="flex items-center mb-2">
-                <input
-                  type="checkbox"
-                  className="mr-2"
-                  checked={selectedClients.includes(client.id)}
-                  onChange={() => handleSelectClient(client.id)}
-                />
-                <label className="text-sm font-medium text-gray-700">{client.name}</label>
-              </div>
-            ))}
-          </div>
+          <h2 className="text-xl font-bold mb-4">Enviar Programa</h2>
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700">Data de Início</label>
-            <ReactDatePicker
-              selected={startDate}
-              onChange={(date) => setStartDate(date)}
-              className="w-full border p-2 rounded"
+            <DatePickerDemo selectedDate={startDate} setSelectedDate={setStartDate} />
+          </div>
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700">Pesquisar Aluno</label>
+            <Input
+              type="text"
+              placeholder="Digite o nome do aluno"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="mb-4 w-full"
             />
           </div>
-          <div className="flex justify-end">
-            <Button onClick={closeClientModal} variant="secondary" className="bg-gray-500 hover:bg-gray-700 text-white py-1 px-3 rounded mr-2">
+          <div className="mb-4 max-h-64 overflow-y-auto">
+            {clients
+              .filter(client => client.name.toLowerCase().includes(searchTerm.toLowerCase()))
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map(client => (
+                <div key={client.id} className="flex items-center mb-2">
+                  <input
+                    type="checkbox"
+                    className="mr-2"
+                    checked={selectedClients.includes(client.id)}
+                    onChange={() => handleSelectClient(client.id)}
+                  />
+                  <label className="text-sm font-medium text-gray-700">{client.name}</label>
+                </div>
+              ))}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button onClick={closeClientModal}>
               Cancelar
             </Button>
-            <Button onClick={handleSendProgram} className="bg-blue-500 hover:bg-blue-700 text-white py-1 px-3 rounded">
+            <Button onClick={handleSendProgram}>
               Enviar
             </Button>
           </div>

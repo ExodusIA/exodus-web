@@ -2,8 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, getDocs, doc, deleteDoc } from "firebase/firestore";
-import { db } from '../../firebaseConfig';
+import { getClients, deleteClient } from '../firebase/clientService';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { slug } from '../utils/slug';
 import { TrashIcon } from '@radix-ui/react-icons';
@@ -21,8 +20,7 @@ const Clients = () => {
   useEffect(() => {
     const fetchClients = async () => {
       try {
-        const querySnapshot = await getDocs(collection(db, "clients"));
-        const clientsList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const clientsList = await getClients();
         setClients(clientsList);
         setFilteredClients(clientsList);
       } catch (error) {
@@ -63,9 +61,13 @@ const Clients = () => {
   const handleDeleteClient = async (id) => {
     const confirmAction = window.confirm("Você tem certeza que deseja excluir este cliente?");
     if (confirmAction) {
-      await deleteDoc(doc(db, "clients", id));
-      setClients(clients.filter(client => client.id !== id));
-      setFilteredClients(filteredClients.filter(client => client.id !== id));
+      try {
+        await deleteClient(id);
+        setClients(clients.filter(client => client.id !== id));
+        setFilteredClients(filteredClients.filter(client => client.id !== id));
+      } catch (error) {
+        console.error('Error deleting client:', error);
+      }
     }
   };
 
