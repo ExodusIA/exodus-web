@@ -8,6 +8,21 @@ import { format, parseISO, isValid, differenceInMonths, addHours } from 'date-fn
 import { Timestamp } from 'firebase/firestore';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+// import {
+//   getClientPrograms,
+//   updateClient,
+//   deleteClientProgram,
+//   getClientGoals,
+//   addClientGoal,
+//   updateClientGoal,
+//   deleteClientGoal,
+//   addClientExam,
+//   deleteClientExam,
+//   getClientExams,
+//   getPrograms,
+//   addClientProgram,
+//   getProgramLastTaskDay
+// } from '../firebase/firebaseServices';
 import {
   getClientPrograms,
   updateClient,
@@ -19,10 +34,12 @@ import {
   addClientExam,
   deleteClientExam,
   getClientExams,
+  addClientProgram
+} from '../firebase/clientService';
+import {
   getPrograms,
-  addClientProgram,
   getProgramLastTaskDay
-} from '../firebase/firebaseServices';
+} from '../firebase/programService';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TrashIcon } from '@radix-ui/react-icons';
 import { DatePickerDemo } from "@/components/ui/date-picker-demo";
@@ -61,15 +78,7 @@ const Kanban = () => {
   const { clientData: initialClientData } = location.state;
   const [clientData, setClientData] = useState(initialClientData);
   const [programs, setPrograms] = useState([]);
-  const [modalIsOpen, setModalIsOpen] = useState(false);
-  const [programTasksModalIsOpen, setProgramTasksModalIsOpen] = useState(false);
-  const [customTaskModalIsOpen, setCustomTaskModalIsOpen] = useState(false);
-  const [selectedProgram, setSelectedProgram] = useState(null);
-  const [selectedCustomTask, setSelectedCustomTask] = useState(null);
-  const [tasks, setTasks] = useState([]);
-  const [customTasks, setCustomTasks] = useState([]);
-  const [newCustomTask, setNewCustomTask] = useState([]);
-  const [programTasks, setProgramTasks] = useState([]);
+  const [modalIsOpen, setModalIsOpen] = useState(false); 
   const [client, setClient] = useState(initialClientData);
   const [successMessage, setSuccessMessage] = useState('');
   const [goals, setGoals] = useState([]);

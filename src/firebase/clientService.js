@@ -1,5 +1,5 @@
 // Importações do Firebase
-import { collection, getDocs, addDoc, deleteDoc, doc, Timestamp, updateDoc } from "firebase/firestore";
+import { collection, getDocs, addDoc, deleteDoc, doc, Timestamp, updateDoc, query, getDoc } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { db } from "./firebaseConfig";
 
@@ -65,12 +65,32 @@ export const addClientProgram = async (clientId, programId, startDate, duration)
 // Função para obter os programas de um cliente
 export const getClientPrograms = async (clientId) => {
   try {
-    const querySnapshot = await getDocs(collection(db, "clients", clientId, "programs"));
+    const q = query(collection(db, "clients", clientId, "programs"));
+    const querySnapshot = await getDocs(q);
     const programsList = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    return programsList;
+
+    // Fetch program details and calculate duration
+    const programsWithDetails = await Promise.all(
+      programsList.map(async (program) => {
+        const programDoc = await getDoc(doc(db, "programs", program.programId));
+        const programData = programDoc.data();
+        
+        // Fetch tasks to calculate duration
+        const tasksSnapshot = await getDocs(collection(db, "programs", program.programId, "tasks"));
+        const tasks = tasksSnapshot.docs.map(doc => doc.data());
+        const lastTaskDay = Math.max(...tasks.map(task => task.day), 0);
+        
+        return { 
+          ...program, 
+          programName: programData.name, 
+          lastTaskDay 
+        };
+      })
+    );
+
+    return programsWithDetails;
   } catch (e) {
     console.error("Error getting documents: ", e);
-    throw e;
   }
 };
 
