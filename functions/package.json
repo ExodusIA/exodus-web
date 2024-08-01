@@ -1,6 +1,7 @@
 {
   "name": "functions",
   "description": "Cloud Functions for Firebase",
+  "type": "module",
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",

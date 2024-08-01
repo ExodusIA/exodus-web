@@ -1,71 +1,43 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { useLocation } from 'react-router-dom';
-import Select from 'react-select';
+import { useParams, useNavigate } from 'react-router-dom';
 import Modal from 'react-modal';
 import { format, parseISO, isValid, differenceInMonths, addHours } from 'date-fns';
 import { Timestamp } from 'firebase/firestore';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-// import {
-//   getClientPrograms,
-//   updateClient,
-//   deleteClientProgram,
-//   getClientGoals,
-//   addClientGoal,
-//   updateClientGoal,
-//   deleteClientGoal,
-//   addClientExam,
-//   deleteClientExam,
-//   getClientExams,
-//   getPrograms,
-//   addClientProgram,
-//   getProgramLastTaskDay
-// } from '../firebase/firebaseServices';
 import {
   getClientPrograms,
+  getClientById,
   updateClient,
   deleteClientProgram,
   getClientGoals,
   addClientGoal,
   updateClientGoal,
   deleteClientGoal,
-  addClientExam,
-  deleteClientExam,
-  getClientExams,
+  addClientFile,
+  deleteClientFile,
+  getClientFiles,
   addClientProgram
-} from '../firebase/clientService';
+} from '../services/clientService';
 import {
   getPrograms,
   getProgramLastTaskDay
-} from '../firebase/programService';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+} from '../services/programService';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TrashIcon } from '@radix-ui/react-icons';
 import { DatePickerDemo } from "@/components/ui/date-picker-demo";
 import { ChevronDown, ChevronUp } from 'lucide-react';
+import { useBusiness } from '@/contexts/BusinessContext';
+import Select from 'react-select'
 
 const statusOptions = [
-  { value: 1, label: 'Ativo' },
-  { value: 0, label: 'Inativo' },
+  { value: true, label: 'Ativo' },
+  { value: false, label: 'Inativo' },
 ];
 
-const programOptions = [
-  { value: 'Mentoria', label: 'Mentoria' },
-  { value: 'Clube de Desafios', label: 'Clube de Desafios' },
-];
-
-const classOptions = [
-  { value: 'CERET - TERÇA E QUINTA - 6:45', label: 'CERET - TERÇA E QUINTA - 6:45' },
-  { value: 'CERET - SEGUNDA E QUARTA - 18:30', label: 'CERET - SEGUNDA E QUINTA - 18:30' },
-  { value: 'CERET - TERÇA E QUINTA - 8:15', label: 'CERET - TERÇA E QUINTA - 8:15' },
-  { value: 'CERET - TERÇA E QUINTA - 9:45 (TURMA 60+)', label: 'CERET - TERÇA E QUINTA - 9:45 (TURMA 60+)' },
-  { value: 'Mentoria Individual', label: 'Mentoria Individual' },
-  { value: 'Clube de Desafios', label: 'Clube de Desafios' },
-  { value: 'IBIRA', label: 'IBIRA' },
-];
-
-const examOptions = [
+const fileOptions = [
   { value: 'Biorressonância', label: 'Biorressonância' },
   { value: 'Bioimpedância', label: 'Bioimpedância' },
   { value: 'Ergoespirograma', label: 'Ergoespirograma' },
@@ -74,26 +46,51 @@ const examOptions = [
 ];
 
 const Kanban = () => {
-  const location = useLocation();
-  const { clientData: initialClientData } = location.state;
-  const [clientData, setClientData] = useState(initialClientData);
+  const { clientId } = useParams();
+  const [clientData, setClientData] = useState(null);
   const [programs, setPrograms] = useState([]);
-  const [modalIsOpen, setModalIsOpen] = useState(false); 
-  const [client, setClient] = useState(initialClientData);
+  const [modalIsOpen, setModalIsOpen] = useState(false);
+  const [client, setClient] = useState({});
   const [successMessage, setSuccessMessage] = useState('');
   const [goals, setGoals] = useState([]);
   const [newGoal, setNewGoal] = useState({ goal: "", deadline: "", completed: false });
   const [goalModalIsOpen, setGoalModalIsOpen] = useState(false);
-  const [exams, setExams] = useState([]);
-  const [newExam, setNewExam] = useState({ date: "", file: null, type: "", observation: "" });
-  const [examModalIsOpen, setExamModalIsOpen] = useState(false);
+  const [files, setFiles] = useState([]);
+  const [newFile, setNewFile] = useState({ date: "", file: null, type: "", observation: "" });
+  const [fileModalIsOpen, setFileModalIsOpen] = useState(false);
   const [errors, setErrors] = useState({});
-  const [otherExamType, setOtherExamType] = useState("");
+  const [otherFileType, setOtherFileType] = useState("");
   const [allPrograms, setAllPrograms] = useState([]);
   const [sendProgramModalIsOpen, setSendProgramModalIsOpen] = useState(false);
   const [selectedProgramToSend, setSelectedProgramToSend] = useState(null);
   const [programStartDate, setProgramStartDate] = useState(new Date());
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
+  const navigate = useNavigate();
+  const { business, loading } = useBusiness();
+
+  useEffect(() => {
+    const fetchClientData = async (clientId) => {
+      try {
+        if (loading) return; // Aguarde até que o estado de carregamento esteja concluído
+  
+        const client = await getClientById(clientId);
+        if (client.business.id !== business.id) {
+          console.error('Acesso negado');
+          navigate('/clients'); // Redirecione para a página de clientes
+          return;
+        }
+        setClientData(client);
+        setClient(client);
+      } catch (error) {
+        console.error('Error fetching client data:', error);
+        navigate('/clients');
+      }
+    };
+  
+    if (clientId && !loading && business) {
+      fetchClientData(clientId);
+    }
+  }, [clientId, navigate, loading, business]);
 
   useEffect(() => {
     const fetchPrograms = async () => {
@@ -118,30 +115,26 @@ const Kanban = () => {
   }, [clientData]);
 
   useEffect(() => {
-    const fetchExams = async () => {
+    const fetchFiles = async () => {
       if (clientData && clientData.id) {
-        const examsList = await getClientExams(clientData.id);
-        setExams(examsList);
+        const filesList = await getClientFiles(clientData.id);
+        setFiles(filesList);
       }
     };
 
-    fetchExams();
+    fetchFiles();
   }, [clientData]);
 
   useEffect(() => {
     const fetchAllPrograms = async () => {
-      const programsList = await getPrograms();
-      setAllPrograms(programsList);
+      if (business && business.id) { // Certifique-se de que o ID do negócio está disponível
+        const programsList = await getPrograms(business.id); // Passe o ID do negócio para a função
+        setAllPrograms(programsList);
+      }
     };
-
+  
     fetchAllPrograms();
-  }, []);
-
-  useEffect(() => {
-    if (modalIsOpen) {
-      setClient(clientData);
-    }
-  }, [modalIsOpen, clientData]);
+  }, [business]);
 
   const openModal = () => {
     setModalIsOpen(true);
@@ -154,28 +147,25 @@ const Kanban = () => {
   const validateClient = () => {
     const newErrors = {};
     if (!client.name) newErrors.name = 'Nome é obrigatório';
-    if (!client.nickName) newErrors.nickName = 'Apelido é obrigatório';
+    if (!client.nickname) newErrors.nickname = 'Apelido é obrigatório';
     if (!client.phone) newErrors.phone = 'Telefone é obrigatório';
     if (!client.email) newErrors.email = 'E-mail é obrigatório';
-    if (!client.status) newErrors.status = 'Status é obrigatório';
-    if (!client.program) newErrors.program = 'Programa é obrigatório';
-    if (!client.class) newErrors.class = 'Turma é obrigatória';
+    if (client.active === undefined) newErrors.status = 'Status é obrigatório';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSaveClient = async () => {
     if (!validateClient()) return;
-
     try {
-      const { id, ...clientDataToUpdate } = client; // Remove the id field
-      await updateClient(id, clientDataToUpdate); // Update client data
+      const { id, ...clientDataToUpdate } = client;
+      await updateClient(id, clientDataToUpdate);
       setSuccessMessage('Cliente atualizado com sucesso!');
       setTimeout(() => {
         setSuccessMessage('');
       }, 3000);
       setModalIsOpen(false);
-      setClientData({ ...client, id }); // Update clientData state
+      setClientData({ ...client, id });
     } catch (error) {
       console.error('Error updating client:', error);
     }
@@ -195,14 +185,10 @@ const Kanban = () => {
 
   const calculateStatus = (startDate, lastTaskDay) => {
     const today = new Date();
-  
     if (!startDate) return 'Data Indisponível';
-  
     const start = startDate.toDate ? startDate.toDate() : new Date(startDate);
-  
     today.setHours(0, 0, 0, 0);
     start.setHours(0, 0, 0, 0);
-  
     const daysPassed = Math.floor((today - start) / (1000 * 60 * 60 * 24));
     if (daysPassed < 0) return 'Não Iniciado';
     return daysPassed <= lastTaskDay ? 'Em andamento' : 'Concluído';
@@ -228,12 +214,10 @@ const Kanban = () => {
   const calculateCurrentDay = (startDate) => {
     const today = new Date();
     const start = startDate.toDate ? startDate.toDate() : new Date(startDate);
-  
     today.setHours(0, 0, 0, 0);
     start.setHours(0, 0, 0, 0);
-  
     const daysPassed = Math.floor((today - start) / (1000 * 60 * 60 * 24));
-    return daysPassed + 1; // Adiciona 1 porque a contagem de dias começa a partir do primeiro dia
+    return daysPassed + 1;
   };
 
   const validateGoal = () => {
@@ -278,37 +262,37 @@ const Kanban = () => {
     }
   };
 
-  const validateExam = () => {
+  const validateFile = () => {
     const newErrors = {};
-    if (!newExam.date || !isValid(new Date(newExam.date))) newErrors.date = 'Data de realização do exame é obrigatória e deve ser uma data válida';
-    if (!newExam.file) newErrors.file = 'Arquivo do exame é obrigatório';
-    if (!newExam.type) newErrors.type = 'Tipo de exame é obrigatório';
+    if (!newFile.date || !isValid(new Date(newFile.date))) newErrors.date = 'Data de realização é obrigatória e deve ser uma data válida';
+    if (!newFile.file) newErrors.file = 'Arquivo do file é obrigatório';
+    if (!newFile.type) newErrors.type = 'Tipo de file é obrigatório';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleAddExam = async () => {
-    if (!validateExam()) return;
+  const handleAddFile = async () => {
+    if (!validateFile()) return;
 
     if (clientData && clientData.id) {
-      const date = new Date(newExam.date);
+      const date = new Date(newFile.date);
       date.setDate(date.getDate() + 1);
-      const examType = newExam.type === 'Outro' ? otherExamType : newExam.type;
-      const examData = { date: Timestamp.fromDate(date), type: examType, observation: newExam.observation };
-      const exam = await addClientExam(clientData.id, examData, newExam.file);
-      setExams([...exams, exam]);
-      setNewExam({ date: "", file: null, type: "", observation: "" });
-      setOtherExamType("");
-      setExamModalIsOpen(false);
+      const fileType = newFile.type === 'Outro' ? otherFileType : newFile.type;
+      const fileData = { date: Timestamp.fromDate(date), type: fileType, observation: newFile.observation };
+      const file = await addClientFile(clientData.id, fileData, newFile.file);
+      setFiles([...files, file]);
+      setNewFile({ date: "", file: null, type: "", observation: "" });
+      setOtherFileType("");
+      setFileModalIsOpen(false);
     }
   };
 
-  const handleDeleteExam = async (examId, fileName) => {
+  const handleDeleteFile = async (fileId, fileName) => {
     if (clientData && clientData.id) {
-      const confirmAction = window.confirm("Você tem certeza que deseja excluir este exame?");
+      const confirmAction = window.confirm("Você tem certeza que deseja excluir este arquivo?");
       if (confirmAction) {
-        await deleteClientExam(clientData.id, examId, fileName);
-        setExams(exams.filter(exam => exam.id !== examId));
+        await deleteClientFile(clientData.id, fileId, fileName);
+        setFiles(files.filter(file => file.id !== fileId));
       }
     }
   };
@@ -322,9 +306,7 @@ const Kanban = () => {
         },
         body: JSON.stringify({ filePath }),
       });
-  
       const data = await response.json();
-  
       if (response.ok) {
         window.open(data.signedUrl, '_blank');
       } else {
@@ -335,15 +317,13 @@ const Kanban = () => {
     }
   };
 
-  const checkExamValidity = (examDate, examType) => {
+  const checkFileValidity = (fileDate, fileType) => {
     const currentDate = new Date();
-    const examDateObject = examDate.toDate ? examDate.toDate() : new Date(examDate);
-    const monthsDifference = differenceInMonths(currentDate, examDateObject);
-  
-    if (examType === "Biorressonância" || examType === "Bioimpedância") {
+    const fileDateObject = fileDate.toDate ? fileDate.toDate() : new Date(fileDate);
+    const monthsDifference = differenceInMonths(currentDate, fileDateObject);
+    if (fileType === "Biorressonância" || fileType === "Bioimpedância") {
       return monthsDifference <= 6 ? "Válido" : "Inválido";
     }
-  
     return monthsDifference <= 12 ? "Válido" : "Inválido";
   };
 
@@ -366,18 +346,12 @@ const Kanban = () => {
 
     try {
       const formattedDate = addHours(programStartDate, programStartDate.getTimezoneOffset() / 60);
-
-      const newProgram = await addClientProgram(clientData.id, selectedProgramToSend.id, formattedDate.toISOString());
-
-      // Encontrar o nome do programa a partir de allPrograms
+      const newProgram = await addClientProgram(clientData.id, selectedProgramToSend.id, "9Sti3H8AZL2wnTQT23ff", formattedDate.toISOString());
       const programName = allPrograms.find(program => program.id === selectedProgramToSend.id)?.name || 'Programa Desconhecido';
       const programId = allPrograms.find(program => program.id === selectedProgramToSend.id)?.id || 'Programa Desconhecido';
-
-      // Calcular status e dia atual
       const lastTaskDay = await getProgramLastTaskDay(programId);
       const status = calculateStatus(newProgram.startDate, lastTaskDay);
       const currentDay = calculateCurrentDay(newProgram.startDate);
-
       const programWithDetails = {
         ...newProgram,
         programName,
@@ -385,7 +359,6 @@ const Kanban = () => {
         status,
         currentDay
       };
-
       setPrograms(prevPrograms => [...prevPrograms, programWithDetails]);
       setSendProgramModalIsOpen(false);
     } catch (error) {
@@ -393,7 +366,7 @@ const Kanban = () => {
     }
   };
 
-  const sortData = (data, key, direction) => {    
+  const sortData = (data, key, direction) => {
     const sortedData = [...data].sort((a, b) => {
       if (a[key] < b[key]) {
         return direction === 'ascending' ? -1 : 1;
@@ -403,13 +376,12 @@ const Kanban = () => {
       }
       return 0;
     });
-
     return sortedData;
   };
 
   const sortedPrograms = useMemo(() => sortConfig.key ? sortData(programs, sortConfig.key, sortConfig.direction) : programs, [programs, sortConfig]);
   const sortedGoals = useMemo(() => sortConfig.key ? sortData(goals, sortConfig.key, sortConfig.direction) : goals, [goals, sortConfig]);
-  const sortedExams = useMemo(() => sortConfig.key ? sortData(exams, sortConfig.key, sortConfig.direction) : exams, [exams, sortConfig]);
+  const sortedFiles = useMemo(() => sortConfig.key ? sortData(files, sortConfig.key, sortConfig.direction) : files, [files, sortConfig]);
 
   const requestSort = (key) => {
     let direction = 'ascending';
@@ -429,12 +401,13 @@ const Kanban = () => {
               Editar Cliente
             </Button>
           </div>
+          {clientData ? (
           <div>
             <div className="mb-2">
               <p><strong>Nome:</strong> {clientData.name}</p>
             </div>
             <div className="mb-2">
-              <p><strong>Apelido:</strong> {clientData.nickName}</p>
+              <p><strong>Apelido:</strong> {clientData.nickname}</p>
             </div>
             <div className="mb-2">
               <p><strong>Telefone:</strong> {clientData.phone}</p>
@@ -444,42 +417,43 @@ const Kanban = () => {
             </div>
             <div className="mb-2">
               <p><strong>Status: </strong> 
-                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusClass(clientData.status === 1 ? 'Ativo' : 'Inativo')}`}>
-                  {clientData.status === 1 ? 'Ativo' : 'Inativo'}
+                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusClass(clientData.active == true ? 'Ativo' : 'Inativo')}`}>
+                  {clientData.active == true ? 'Ativo' : 'Inativo'}
                 </span>
               </p>
             </div>
           </div>
+        ) : (
+          <p>Carregando dados do cliente...</p>
+        )}
         </div>
         <div className="bg-white p-6 rounded shadow-md">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold">Exames</h2>
-            <Button onClick={() => setExamModalIsOpen(true)}>
-              Adicionar Exame
+            <h2 className="text-xl font-bold">Arquivos</h2>
+            <Button onClick={() => setFileModalIsOpen(true)}>
+              Adicionar Arquivo
             </Button>
           </div>
           <div className="max-h-48 overflow-y-auto">
             <Table className="min-w-full">
               <TableHeader>
                 <TableRow>
-                  <TableHead onClick={() => requestSort('type')}>
-                    Tipo de Exame {sortConfig.key === 'type' && (sortConfig.direction === 'ascending' ? <ChevronUp className="inline" /> : <ChevronDown className="inline" />)}
-                  </TableHead>
-                  <TableHead onClick={() => requestSort('date')}>Data de Realização {sortConfig.key === 'date' && (sortConfig.direction === 'ascending' ? <ChevronUp className="inline" /> : <ChevronDown className="inline" />)}</TableHead>
-                  <TableHead onClick={() => requestSort('validity')}>Validade {sortConfig.key === 'validity' && (sortConfig.direction === 'ascending' ? <ChevronUp className="inline" /> : <ChevronDown className="inline" />)}</TableHead>
+                  <TableHead>Tipo de Arquivo</TableHead>
+                  <TableHead>Data de Realização</TableHead>
+                  <TableHead>Validade</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedExams.length > 0 ? (
-                  sortedExams.map((exam) => {
-                    const validityStatus = checkExamValidity(exam.date, exam.type);                    
+                {files.length > 0 ? (
+                  files.map((file) => {
+                    const validityStatus = checkFileValidity(file.date, file.type);                    
                     return (
-                      <TableRow key={exam.id} className="hover:bg-gray-100 cursor-pointer" onClick={() => handleOpenPDF(exam.filePath)}>
+                      <TableRow key={file.id} className="hover:bg-gray-100 cursor-pointer" onClick={() => handleOpenPDF(file.filePath)}>
                         <TableCell>
-                          {exam.type}
+                          {file.type}
                         </TableCell>
-                        <TableCell>{exam.date ? format(parseISO(exam.date.toDate ? exam.date.toDate().toISOString() : exam.date), 'dd/MM/yyyy') : 'Data Inválida'}</TableCell>
+                        <TableCell>{file.date ? format(parseISO(file.date.toDate ? file.date.toDate().toISOString() : file.date), 'dd/MM/yyyy') : 'Data Inválida'}</TableCell>
                         <TableCell>
                           <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${validityStatus === 'Válido' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                             {validityStatus}
@@ -487,7 +461,7 @@ const Kanban = () => {
                         </TableCell>
                         <TableCell onClick={(e) => e.stopPropagation()}>
                           <TrashIcon
-                            onClick={() => handleDeleteExam(exam.id, exam.fileName)}
+                            onClick={() => handleDeleteFile(file.id, file.fileName)}
                             className="text-red-500 cursor-pointer"
                           />
                         </TableCell>
@@ -496,7 +470,7 @@ const Kanban = () => {
                   })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan="5" className="text-center">Nenhum exame adicionado</TableCell>
+                    <TableCell colSpan="5" className="text-center">Nenhum arquivo adicionado</TableCell>
                   </TableRow>
                 )}
               </TableBody>
@@ -504,7 +478,7 @@ const Kanban = () => {
           </div>
         </div>
         <div className="bg-white p-6 rounded shadow-md">
-          <h2 className="text-xl font-bold mb-4">Resultados e Reflexões</h2>
+          <h2 className="text-xl font-bold mb-4">Insights</h2>
           <h2 className="text-6xl font-bold mb-4">Em breve</h2>
         </div>
       </div>
@@ -520,17 +494,17 @@ const Kanban = () => {
             <Table className="min-w-full">
               <TableHeader>
                 <TableRow>
-                  <TableHead onClick={() => requestSort('programName')}>Nome do Programa {sortConfig.key === 'programName' && (sortConfig.direction === 'ascending' ? <ChevronUp className="inline" /> : <ChevronDown className="inline" />)}</TableHead>
-                  <TableHead onClick={() => requestSort('startDate')}>Data de Início {sortConfig.key === 'startDate' && (sortConfig.direction === 'ascending' ? <ChevronUp className="inline" /> : <ChevronDown className="inline" />)}</TableHead>
-                  <TableHead onClick={() => requestSort('currentDay')}>Dia Atual {sortConfig.key === 'currentDay' && (sortConfig.direction === 'ascending' ? <ChevronUp className="inline" /> : <ChevronDown className="inline" />)}</TableHead>
-                  <TableHead onClick={() => requestSort('lastTaskDay')}>Duração {sortConfig.key === 'lastTaskDay' && (sortConfig.direction === 'ascending' ? <ChevronUp className="inline" /> : <ChevronDown className="inline" />)}</TableHead>
-                  <TableHead onClick={() => requestSort('status')}>Status {sortConfig.key === 'status' && (sortConfig.direction === 'ascending' ? <ChevronUp className="inline" /> : <ChevronDown className="inline" />)}</TableHead>
+                  <TableHead>Nome do Programa</TableHead>
+                  <TableHead>Data de Início</TableHead>
+                  <TableHead>Dia Atual</TableHead>
+                  <TableHead>Duração</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedPrograms.length > 0 ? (
-                  sortedPrograms.map((program) => {
+                {programs.length > 0 ? (
+                  programs.map((program) => {
                     const status = calculateStatus(program.startDate, program.lastTaskDay);
                     const currentDay = calculateCurrentDay(program.startDate);
                     return (
@@ -575,15 +549,15 @@ const Kanban = () => {
             <Table className="min-w-full">
               <TableHeader>
                 <TableRow>
-                  <TableHead onClick={() => requestSort('goal')}></TableHead>
-                  <TableHead onClick={() => requestSort('goal')}>Meta {sortConfig.key === 'goal' && (sortConfig.direction === 'ascending' ? <ChevronUp className="inline" /> : <ChevronDown className="inline" />)}</TableHead>
-                  <TableHead onClick={() => requestSort('deadline')}>Prazo {sortConfig.key === 'deadline' && (sortConfig.direction === 'ascending' ? <ChevronUp className="inline" /> : <ChevronDown className="inline" />)}</TableHead>
+                  <TableHead></TableHead>
+                  <TableHead>Meta</TableHead>
+                  <TableHead>Prazo</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedGoals.length > 0 ? (
-                  sortedGoals.map((goal) => (
+                {goals.length > 0 ? (
+                  goals.map((goal) => (
                     <TableRow 
                       key={goal.id} 
                       className={`hover:bg-gray-100 cursor-pointer ${goal.completed ? 'line-through text-gray-500' : ''}`} 
@@ -594,7 +568,7 @@ const Kanban = () => {
                           type="checkbox"
                           checked={goal.completed}
                           onChange={(e) => handleUpdateGoal(goal.id, { completed: e.target.checked })}
-                          onClick={(e) => e.stopPropagation()} // Previene que o clique no checkbox também dispare o clique na linha
+                          onClick={(e) => e.stopPropagation()}
                         />
                       </TableCell>
                       <TableCell>{goal.goal}</TableCell>
@@ -602,7 +576,7 @@ const Kanban = () => {
                       <TableCell>
                         <TrashIcon
                           onClick={(e) => {
-                            e.stopPropagation(); // Previene que o clique no ícone também dispare o clique na linha
+                            e.stopPropagation();
                             handleDeleteGoal(goal.id);
                           }}
                           className="text-red-500 cursor-pointer"
@@ -620,7 +594,7 @@ const Kanban = () => {
           </div>
         </div>
       </div>
-  
+
       <Modal
         isOpen={modalIsOpen}
         onRequestClose={closeModal}
@@ -645,10 +619,10 @@ const Kanban = () => {
                 <label className="block text-sm font-medium text-gray-700">Apelido</label>
                 <Input
                   type="text"
-                  value={client.nickName}
-                  onChange={(e) => setClient({ ...client, nickName: e.target.value })}
+                  value={client.nickname}
+                  onChange={(e) => setClient({ ...client, nickname: e.target.value })}
                 />
-                {errors.nickName && <p className="text-red-500 text-xs italic">{errors.nickName}</p>}
+                {errors.nickname && <p className="text-red-500 text-xs italic">{errors.nickname}</p>}
               </div>
             </div>
             <div>
@@ -669,41 +643,16 @@ const Kanban = () => {
               />
               {errors.email && <p className="text-red-500 text-xs italic">{errors.email}</p>}
             </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Status</label>
-                <Select
-                  value={statusOptions.find(option => option.value === client.status)}
-                  onChange={(selectedOption) => setClient({ ...client, status: selectedOption.value })}
-                  options={statusOptions}
-                  className="react-select-container"
-                  classNamePrefix="react-select"
-                />
-                {errors.status && <p className="text-red-500 text-xs italic">{errors.status}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Programa</label>
-                <Select
-                  value={programOptions.find(option => option.value === client.program)}
-                  onChange={(selectedOption) => setClient({ ...client, program: selectedOption.value })}
-                  options={programOptions}
-                  className="react-select-container"
-                  classNamePrefix="react-select"
-                />
-                {errors.program && <p className="text-red-500 text-xs italic">{errors.program}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Turma</label>
-                <Select
-                  value={classOptions.find(option => option.value === client.class)}
-                  onChange={(selectedOption) => setClient({ ...client, class: selectedOption.value })}
-                  options={classOptions}
-                  className="react-select-container"
-                  classNamePrefix="react-select"
-                  menuPlacement="top"
-                />
-                {errors.class && <p className="text-red-500 text-xs italic">{errors.class}</p>}
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Status</label>
+              <Select
+                value={statusOptions.find(option => option.value === client.active)}
+                onChange={(selectedOption) => setClient({ ...client, active: selectedOption.value })}
+                options={statusOptions}
+                className="react-select-container"
+                classNamePrefix="react-select"
+              />
+              {errors.status && <p className="text-red-500 text-xs italic">{errors.status}</p>}
             </div>
             <div className="flex justify-end">
               <Button onClick={closeModal} variant="secondary" className="mr-2">
@@ -716,7 +665,6 @@ const Kanban = () => {
           </div>
         </div>
       </Modal>
-  
       <Modal
         isOpen={goalModalIsOpen}
         onRequestClose={() => setGoalModalIsOpen(false)}
@@ -757,41 +705,40 @@ const Kanban = () => {
           </div>
         </div>
       </Modal>
-
       <Modal
-        isOpen={examModalIsOpen}
-        onRequestClose={() => setExamModalIsOpen(false)}
-        contentLabel="Adicionar Exame"
+        isOpen={fileModalIsOpen}
+        onRequestClose={() => setFileModalIsOpen(false)}
+        contentLabel="Adicionar Arquivo"
         className="fixed inset-0 flex items-center justify-center p-4"
         overlayClassName="fixed inset-0 bg-black bg-opacity-50"
       >
         <div className="bg-white p-6 rounded shadow-lg max-w-2xl w-full">
-          <h2 className="text-xl font-bold mb-4">Adicionar Exame</h2>
+          <h2 className="text-xl font-bold mb-4">Adicionar Arquivo</h2>
           <div className="grid grid-cols-1 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700">Data de Realização</label>
               <Input
                 type="date"
-                value={newExam.date}
-                onChange={(e) => setNewExam({ ...newExam, date: e.target.value })}
+                value={newFile.date}
+                onChange={(e) => setNewFile({ ...newFile, date: e.target.value })}
               />
               {errors.date && <p className="text-red-500 text-xs italic">{errors.date}</p>}
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Tipo de Exame</label>
+              <label className="block text-sm font-medium text-gray-700">Tipo de Arquivo</label>
               <Select
-                value={examOptions.find(option => option.value === newExam.type)}
-                onChange={(selectedOption) => setNewExam({ ...newExam, type: selectedOption.value })}
-                options={examOptions}
+                value={fileOptions.find(option => option.value === newFile.type)}
+                onChange={(selectedOption) => setNewFile({ ...newFile, type: selectedOption.value })}
+                options={fileOptions}
                 className="react-select-container"
                 classNamePrefix="react-select"
               />
-              {newExam.type === 'Outro' && (
+              {newFile.type === 'Outro' && (
                 <Input
                   type="text"
-                  value={otherExamType}
-                  onChange={(e) => setOtherExamType(e.target.value)}
-                  placeholder="Digite o tipo de exame"
+                  value={otherFileType}
+                  onChange={(e) => setOtherFileType(e.target.value)}
+                  placeholder="Digite o tipo de arquivo"
                   className="mt-2"
                 />
               )}
@@ -801,7 +748,7 @@ const Kanban = () => {
               <label className="block text-sm font-medium text-gray-700">Arquivo</label>
               <Input
                 type="file"
-                onChange={(e) => setNewExam({ ...newExam, file: e.target.files[0] })}
+                onChange={(e) => setNewFile({ ...newFile, file: e.target.files[0] })}
               />
               {errors.file && <p className="text-red-500 text-xs italic">{errors.file}</p>}
             </div>
@@ -809,24 +756,22 @@ const Kanban = () => {
               <label className="block text-sm font-medium text-gray-700">Observação</label>
               <Input
                 type="text"
-                value={newExam.observation}
-                onChange={(e) => setNewExam({ ...newExam, observation: e.target.value })}
+                value={newFile.observation}
+                onChange={(e) => setNewFile({ ...newFile, observation: e.target.value })}
                 placeholder="Observação"
               />
             </div>
             <div className="flex justify-end">
-              <Button onClick={() => setExamModalIsOpen(false)} variant="secondary" className="mr-2">
+              <Button onClick={() => setFileModalIsOpen(false)} variant="secondary" className="mr-2">
                 Cancelar
               </Button>
-              <Button onClick={handleAddExam}>
+              <Button onClick={handleAddFile}>
                 Adicionar
               </Button>
             </div>
           </div>
         </div>
       </Modal>
-
-      {/* Modal for Sending Program */}
       <Modal
         isOpen={sendProgramModalIsOpen}
         onRequestClose={closeSendProgramModal}
@@ -844,6 +789,7 @@ const Kanban = () => {
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700">Selecione um Programa</label>
             <Select
+              placeholder="Selecionar"
               options={allPrograms.map(program => ({ value: program.id, label: program.name }))}
               onChange={(selectedOption) => {
                 const selectedProgram = allPrograms.find(program => program.id === selectedOption.value);

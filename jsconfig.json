@@ -5,7 +5,9 @@
         "@components/*": ["components/*"],
         "@/components/ui/*": ["components/ui/*"],
         "@lib/*": ["lib/*"],
-        "@/*": ["*"]
+        "@/*": ["*"],
+        "@services/*": ["services/*"],
+        "@contexts/*": ["contexts/*"],
       }
     },
     "include": ["src"]

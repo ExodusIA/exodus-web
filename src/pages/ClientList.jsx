@@ -1,14 +1,14 @@
-"use client";
-
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getClients, deleteClient } from '../firebase/clientService';
+import { getClients, deleteClient } from '../services/clientService';
+import { getClientGroups } from '../services/groupService';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { slug } from '../utils/slug';
 import { TrashIcon } from '@radix-ui/react-icons';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ChevronDown, ChevronUp } from 'lucide-react';
+import { useBusiness } from '@/contexts/BusinessContext';
 
 const Clients = () => {
   const [clients, setClients] = useState([]);
@@ -16,20 +16,27 @@ const Clients = () => {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
   const [filteredClients, setFilteredClients] = useState([]);
   const navigate = useNavigate();
+  const { business, loading } = useBusiness();
 
   useEffect(() => {
-    const fetchClients = async () => {
+    const fetchClients = async (businessId) => {
       try {
-        const clientsList = await getClients();
-        setClients(clientsList);
-        setFilteredClients(clientsList);
+        const clientsList = await getClients(businessId);
+        const clientsWithGroups = await Promise.all(clientsList.map(async (client) => {
+          const groups = await getClientGroups(client.groups);
+          return { ...client, groups };
+        }));
+        setClients(clientsWithGroups);
+        setFilteredClients(clientsWithGroups);
       } catch (error) {
         console.error('Error fetching clients:', error);
       }
     };
 
-    fetchClients();
-  }, []);
+    if (business && business.id) {
+      fetchClients(business.id);
+    }
+  }, [business]);
 
   useEffect(() => {
     const results = clients.filter(client =>
@@ -72,8 +79,12 @@ const Clients = () => {
   };
 
   const handleKanbanOpen = (client) => {
-    navigate(`/clients/${slug(client.name)}`, { state: { clientData: client } });
+    navigate(`/clients/${client.id}`);
   };
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <div className="container mx-auto px-4 py-6">
@@ -97,11 +108,11 @@ const Clients = () => {
               <TableHead className="px-4 py-2 text-left cursor-pointer" onClick={() => sortClients('name')}>
                 Nome {sortConfig.key === 'name' && (sortConfig.direction === 'ascending' ? <ChevronUp className="inline" /> : <ChevronDown className="inline" />)}
               </TableHead>
-              <TableHead className="px-4 py-2 text-left cursor-pointer" onClick={() => sortClients('status')}>
-                Status {sortConfig.key === 'status' && (sortConfig.direction === 'ascending' ? <ChevronUp className="inline" /> : <ChevronDown className="inline" />)}
+              <TableHead className="px-4 py-2 text-left cursor-pointer" onClick={() => sortClients('active')}>
+                Status {sortConfig.key === 'active' && (sortConfig.direction === 'ascending' ? <ChevronUp className="inline" /> : <ChevronDown className="inline" />)}
               </TableHead>
-              <TableHead className="px-4 py-2 text-left cursor-pointer" onClick={() => sortClients('program')}>
-                Programa {sortConfig.key === 'program' && (sortConfig.direction === 'ascending' ? <ChevronUp className="inline" /> : <ChevronDown className="inline" />)}
+              <TableHead className="px-4 py-2 text-left">
+                Grupos
               </TableHead>
               <TableHead className="px-4 py-2 text-right"></TableHead>
             </TableRow>
@@ -113,14 +124,24 @@ const Clients = () => {
                   {client.name}
                 </TableCell>
                 <TableCell className="px-4 py-2">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${client.status === 1 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                    {client.status === 1 ? 'Ativo' : 'Inativo'}
+                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${client.active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                    {client.active ? 'Ativo' : 'Inativo'}
                   </span>
                 </TableCell>
-                <TableCell className="px-4 py-2">{client.program}</TableCell>
+                <TableCell className="px-4 py-2">
+                  {client.groups && client.groups.length > 0 ? (
+                    client.groups.map((group, index) => (
+                      <span key={index} className="block">
+                        {group.name}
+                      </span>
+                    ))
+                  ) : (
+                    <span>Sem grupo</span>
+                  )}
+                </TableCell>
                 <TableCell className="px-4 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                   <button className="text-red-500 hover:text-red-700" onClick={() => handleDeleteClient(client.id)}>
-                    <TrashIcon className="h-5 w-5" />
+                    <TrashIcon />
                   </button>
                 </TableCell>
               </TableRow>

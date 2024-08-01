@@ -1,6 +1,6 @@
 // Importações do Firebase
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
-import { db } from "./firebaseConfig";
+import { db } from "./firebaseConfig.js";
 
 // Função para obter todas as tarefas de um programa específico
 export const getProgramTasks = async (programId) => {

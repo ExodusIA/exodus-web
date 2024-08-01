@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useEffect, useState, useContext } from 'react';
 import { NavLink } from 'react-router-dom';
 import { HomeIcon, PersonIcon, GearIcon, RocketIcon, CalendarIcon, ExitIcon, HamburgerMenuIcon } from '@radix-ui/react-icons';
 import { getAuth, signOut } from 'firebase/auth';
+import { useBusiness } from '@/contexts/BusinessContext';
 
 const Sidebar = ({ isOpen, setIsOpen }) => {
   const auth = getAuth();
+  const { business } = useBusiness();
 
   const handleLogout = async () => {
     try {
@@ -29,6 +31,11 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
             <HamburgerMenuIcon className={iconSizeClass} />
           </button>
         </div>
+        {isOpen && business && business.name && (
+          <div className="text-center text-lg font-semibold p-2">
+            {business.name}
+          </div>
+        )}
         <nav className="space-y-2">
           <NavLink 
             to="/" 

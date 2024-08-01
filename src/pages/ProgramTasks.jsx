@@ -1,30 +1,26 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import Modal from 'react-modal';
 import { format, addHours, subHours } from 'date-fns';
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { PlusIcon } from 'lucide-react';
-import { getProgramTasks, addProgramTask, updateProgramTask, deleteProgramTask } from '../firebase/taskService';
-import { getClients, addClientProgram } from '../firebase/clientService';
-import { updateProgram } from '../firebase/programService';
+import { getProgramTasks, addProgramTask, updateProgramTask, deleteProgramTask } from '../services/taskService';
+import { getClients, addClientProgram } from '../services/clientService';
+import { updateProgram, getProgramById } from '../services/programService';
 import { DatePickerDemo } from "@/components/ui/date-picker-demo";
+import { useBusiness } from '@/contexts/BusinessContext';
 
 Modal.setAppElement('#root');
 
 const ProgramTasks = () => {
-  const location = useLocation();
-  const { programData } = location.state || {};
-  const [program, setProgram] = useState(programData);
+  const { programId } = useParams();
+  const { business, loading } = useBusiness();
+  const [program, setProgram] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [weeks, setWeeks] = useState([1]);
   const [modalIsOpen, setModalIsOpen] = useState(false);
@@ -38,11 +34,22 @@ const ProgramTasks = () => {
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    if (program && program.id) {
-      const loadTasks = async () => {
-        const tasksList = await getProgramTasks(program.id);
+    if (!programId || loading || !business) return;
+
+    const fetchProgramData = async () => {
+      try {
+        const programData = await getProgramById(programId);
+
+        if (programData.business.id !== business.id) {
+          console.error('Acesso negado: Programa não pertence ao negócio do usuário.');
+          return;
+        }
+
+        setProgram(programData);
+
+        const tasksList = await getProgramTasks(programId);
         if (tasksList.length === 0) {
-          setWeeks([1]); // Se não houver tarefas, exiba a primeira semana por padrão
+          setWeeks([1]);
         } else {
           const tasksWithDetails = tasksList.map(task => ({
             ...task,
@@ -54,11 +61,13 @@ const ProgramTasks = () => {
           const maxWeek = Math.max(...tasksWithDetails.map(task => task.week));
           setWeeks(Array.from({ length: maxWeek }, (_, i) => i + 1));
         }
-      };
+      } catch (error) {
+        console.error('Erro ao buscar dados do programa:', error);
+      }
+    };
 
-      loadTasks();
-    }
-  }, [program]);
+    fetchProgramData();
+  }, [programId, loading, business]);
 
   const addWeek = () => {
     setWeeks([...weeks, weeks.length + 1]);
@@ -147,7 +156,7 @@ const ProgramTasks = () => {
   };
 
   const openClientModal = async () => {
-    const clientsList = await getClients();
+    const clientsList = await getClients(business.id);
     setClients(clientsList);
     setClientModalIsOpen(true);
   };
@@ -167,11 +176,10 @@ const ProgramTasks = () => {
 
   const handleSendProgram = async () => {
     try {
-      // Ajusta a data para garantir que está na meia-noite do fuso horário local
       const adjustedStartDate = addHours(startDate, startDate.getTimezoneOffset() / 60);
 
       await Promise.all(selectedClients.map(clientId => 
-        addClientProgram(clientId, program.id, adjustedStartDate.toISOString(), tasks.length * 7)
+        addClientProgram(clientId, program.id, '9Sti3H8AZL2wnTQT23ff', adjustedStartDate.toISOString(), tasks.length * 7)
       ));
 
       closeClientModal();
@@ -182,69 +190,77 @@ const ProgramTasks = () => {
 
   return (
     <div className="container mx-auto px-4 py-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Programa: {program.name}</h1>
-        <Button onClick={openClientModal} >
-          Enviar Programa
-        </Button>
-      </div>
-      <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700">Nome do Programa</label>
-        <Input
-          type="text"
-          value={program.name}
-          onChange={(e) => setProgram({ ...program, name: e.target.value })}
-          onBlur={handleProgramChange}
-        />
-      </div>
-      <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700">Descrição do Programa</label>
-        <Textarea
-          value={program.description}
-          onChange={(e) => setProgram({ ...program, description: e.target.value })}
-          onBlur={handleProgramChange}
-        />
-      </div>
-      <div className="flex flex-col">
-        {weeks.map((week) => (
-          <div key={week} className="mb-6">
-            <h2 className="text-2xl font-semibold mb-2">Semana {week}</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-              {[...Array(7)].map((_, dayOfWeek) => (
-                <Card key={dayOfWeek} className="border p-4 rounded relative flex flex-col">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold">Dia {dayOfWeek + 1}</h3>
-                    <div
-                      onClick={() => openModal(week, dayOfWeek + 1)}
-                      className="cursor-pointer text-xl text-gray-400 hover:text-blue-600"
-                    >
-                      +
-                    </div>
-                  </div>
-                  {tasks
-                    .filter(task => task.week === week && task.dayOfWeek === dayOfWeek + 1)
-                    .map(task => (
-                      <div
-                        key={task.id}
-                        className="mb-2 cursor-pointer w-full flex items-center justify-center border p-2 rounded text-sm"
-                        onClick={() => handleTaskClick(task)}
-                      >
-                        <div className="truncate text-center">
-                          <strong>{task.taskName}</strong>
+      {loading ? (
+        <p>Carregando...</p>
+      ) : program ? (
+        <>
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-3xl font-bold">Programa: {program.name}</h1>
+            <Button onClick={openClientModal}>
+              Enviar Programa
+            </Button>
+          </div>
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700">Nome do Programa</label>
+            <Input
+              type="text"
+              value={program.name}
+              onChange={(e) => setProgram({ ...program, name: e.target.value })}
+              onBlur={handleProgramChange}
+            />
+          </div>
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700">Descrição do Programa</label>
+            <Textarea
+              value={program.description}
+              onChange={(e) => setProgram({ ...program, description: e.target.value })}
+              onBlur={handleProgramChange}
+            />
+          </div>
+          <div className="flex flex-col">
+            {weeks.map((week) => (
+              <div key={week} className="mb-6">
+                <h2 className="text-2xl font-semibold mb-2">Semana {week}</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+                  {[...Array(7)].map((_, dayOfWeek) => (
+                    <Card key={dayOfWeek} className="border p-4 rounded relative flex flex-col">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold">Dia {dayOfWeek + 1}</h3>
+                        <div
+                          onClick={() => openModal(week, dayOfWeek + 1)}
+                          className="cursor-pointer text-xl text-gray-400 hover:text-blue-600"
+                        >
+                          <PlusIcon />
                         </div>
                       </div>
-                    ))}
-                </Card>
-              ))}
+                      {tasks
+                        .filter(task => task.week === week && task.dayOfWeek === dayOfWeek + 1)
+                        .map(task => (
+                          <div
+                            key={task.id}
+                            className="mb-2 cursor-pointer w-full flex items-center justify-center border p-2 rounded text-sm"
+                            onClick={() => handleTaskClick(task)}
+                          >
+                            <div className="truncate text-center">
+                              <strong>{task.taskName}</strong>
+                            </div>
+                          </div>
+                        ))}
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            ))}
+            <div className="flex justify-end mt-4">
+              <Button onClick={addWeek}>
+                Adicionar Semana
+              </Button>
             </div>
           </div>
-        ))}
-        <div className="flex justify-end mt-4">
-          <Button onClick={addWeek} >
-            Adicionar Semana
-          </Button>
-        </div>
-      </div>
+        </>
+      ) : (
+        <p>Programa não encontrado ou acesso negado.</p>
+      )}
 
       <Modal
         isOpen={modalIsOpen}
@@ -282,7 +298,7 @@ const ProgramTasks = () => {
               <Button onClick={closeModal}>
                 Cancelar
               </Button>
-              <Button onClick={handleSaveTask} >
+              <Button onClick={handleSaveTask}>
                 Salvar
               </Button>
             </div>

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
-import { getPrograms, deleteProgram, getProgramLastTaskDay } from "../firebase/programService";
+import { getPrograms, deleteProgram, getProgramLastTaskDay } from "../services/programService";
 import { slug } from "../utils/slug";
 import { TrashIcon } from "@radix-ui/react-icons";
 import {
@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { useBusiness } from '@/contexts/BusinessContext';
 
 const Programs = () => {
   const [programs, setPrograms] = useState([]);
@@ -26,11 +27,12 @@ const Programs = () => {
   });
   const [filteredPrograms, setFilteredPrograms] = useState([]);
   const navigate = useNavigate();
+  const { business, loading } = useBusiness();
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchData = async (businessId) => {
       try {
-        const programsList = await getPrograms();
+        const programsList = await getPrograms(businessId);
         const programsWithDuration = await Promise.all(
           programsList.map(async (program) => {
             const duration = await getProgramLastTaskDay(program.id);
@@ -44,8 +46,10 @@ const Programs = () => {
       }
     };
 
-    fetchData();
-  }, []);
+    if (business && business.id) {
+      fetchData(business.id);    
+    }    
+  }, [business]);
 
   useEffect(() => {
     const results = programs.filter((program) =>
@@ -53,6 +57,10 @@ const Programs = () => {
     );
     setFilteredPrograms(results);
   }, [searchTerm, programs]);
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
 
   const sortPrograms = (key) => {
     let direction = "ascending";
@@ -90,7 +98,7 @@ const Programs = () => {
   };
 
   const handleViewProgram = (program) => {
-    navigate(`/programs/${slug(program.name)}/tasks`, { state: { programData: program } });
+    navigate(`/programs/${program.id}/tasks`);
   };
 
   return (

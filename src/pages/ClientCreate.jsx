@@ -1,36 +1,59 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { addClient } from '../firebase/clientService';
+import InputMask from 'react-input-mask';
+import { addClient } from '../services/clientService';
+import { getGroups } from '../services/groupService';
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { useBusiness } from '@/contexts/BusinessContext';
+import Select from 'react-select';
 
 const AddClient = () => {
   const [name, setName] = useState('');
-  const [nickName, setNickname] = useState('');
+  const [nickname, setNickname] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [status, setStatus] = useState(1);
-  const [program, setProgram] = useState('');
-  const [classGroup, setClassGroup] = useState('');
+  const [groups, setGroups] = useState([]); // Lista de grupos do negócio
+  const [selectedGroups, setSelectedGroups] = useState([]); // Grupos selecionados
   const navigate = useNavigate();
+  const { business, loading } = useBusiness();
+
+  useEffect(() => {
+    const fetchGroups = async () => {
+      try {
+        const businessGroups = await getGroups(business.id);
+        setGroups(businessGroups);
+      } catch (error) {
+        console.error('Error fetching groups:', error);
+      }
+    };
+
+    if (business && business.id) {
+      fetchGroups();
+    }
+  }, [business]);
 
   const handleSave = async () => {
     try {
       await addClient({
         name,
-        nickName,
-        phone,
+        nickname,
+        phone: phone.replace(/\D/g, ''), // Remover a máscara antes de salvar
         email,
-        status,
-        program,
-        class: classGroup
+        business: business.id,
+        groups: selectedGroups.map(group => group.value),
+        active: true,
       });
       navigate('/clients');
     } catch (error) {
       console.error('Error adding client:', error);
     }
   };
+
+  const groupOptions = groups.map(group => ({
+    value: group.id,
+    label: group.name
+  }));
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -47,17 +70,23 @@ const AddClient = () => {
         <label className="block text-sm font-medium text-gray-700">Apelido</label>
         <Input
           type="text"
-          value={nickName}
+          value={nickname}
           onChange={(e) => setNickname(e.target.value)}
         />
       </div>
       <div className="mb-4">
         <label className="block text-sm font-medium text-gray-700">Telefone</label>
-        <Input
-          type="text"
+        <InputMask
+          mask="+55 (99) 99999-9999"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
-        />
+          maskChar={null}
+        >
+          {() => <Input
+            type="text"
+            placeholder="Digite o telefone"
+          />}
+        </InputMask>
       </div>
       <div className="mb-4">
         <label className="block text-sm font-medium text-gray-700">E-mail</label>
@@ -68,30 +97,14 @@ const AddClient = () => {
         />
       </div>
       <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700">Status</label>
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          className="w-full px-3 py-2 border rounded"
-        >
-          <option value={1}>Ativo</option>
-          <option value={0}>Inativo</option>
-        </select>
-      </div>
-      <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700">Programa</label>
-        <Input
-          type="text"
-          value={program}
-          onChange={(e) => setProgram(e.target.value)}
-        />
-      </div>
-      <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700">Turma</label>
-        <Input
-          type="text"
-          value={classGroup}
-          onChange={(e) => setClassGroup(e.target.value)}
+        <label className="block text-sm font-medium text-gray-700">Grupos</label>
+        <Select
+          isMulti
+          options={groupOptions}
+          value={selectedGroups}
+          onChange={setSelectedGroups}
+          closeMenuOnSelect={false}
+          hideSelectedOptions={false}
         />
       </div>
       <Button onClick={handleSave}>

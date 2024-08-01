@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { useBusiness } from '@/contexts/BusinessContext';
+import { getUserBusiness } from '@/services/loginService';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -12,18 +14,37 @@ const Login = () => {
   const [error, setError] = useState('');
   const navigate = useNavigate();
   const auth = getAuth();
+  const { business, loading, setBusiness } = useBusiness();
+
+  useEffect(() => {
+    if (!loading && business) {
+      navigate('/');
+    }
+  }, [loading, business, navigate]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setError(''); // Reset error message
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // Buscar dados do negócio do usuário
+      const businessData = await getUserBusiness(user.uid);
+
+      // Atualizar o contexto do negócio
+      setBusiness(businessData);
+
       navigate('/');
     } catch (error) {
       setError('Falha ao entrar. Por favor, verifique seu email e senha.');
       console.error('Erro ao entrar:', error);
     }
   };
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center overflow-hidden">

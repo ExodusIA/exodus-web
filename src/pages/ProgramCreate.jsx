@@ -1,26 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getPrograms, addProgram } from '../firebase/programService';
+import { getPrograms, addProgram } from '../services/programService';
 import { slug } from '../utils/slug';
 import { Button } from "@/components/ui/button";
+import { useBusiness } from '@/contexts/BusinessContext';
 
 const ProgramCreate = () => {
   const [newProgram, setNewProgram] = useState({ name: '', description: '' });
   const [existingPrograms, setExistingPrograms] = useState([]);
   const navigate = useNavigate();
+  const { business, loading } = useBusiness();
 
   useEffect(() => {
-    const fetchPrograms = async () => {
+    const fetchPrograms = async (businessId) => {
       try {
-        const programsList = await getPrograms();
+        const programsList = await getPrograms(businessId);
         setExistingPrograms(programsList);
       } catch (error) {
         console.error('Erro ao buscar programas:', error);
       }
     };
 
-    fetchPrograms();
-  }, []);
+    fetchPrograms(business.id);
+  }, [business]);
 
   const handleSave = async () => {
     const programExists = existingPrograms.some(program => program.name.toLowerCase() === newProgram.name.toLowerCase());
@@ -31,8 +33,8 @@ const ProgramCreate = () => {
     }
 
     try {
-      const createdProgram = await addProgram(newProgram);
-      navigate(`/programs/${slug(newProgram.name)}/tasks`, { state: { programData: createdProgram } });
+      const createdProgram = await addProgram({...newProgram, business: business.id});
+      navigate(`/programs/${createdProgram.id}/tasks`);
     } catch (error) {
       console.error('Erro ao salvar programa:', error);
     }
